@@ -85,6 +85,7 @@ fi
     args: [root],
     env: {
       ...process.env,
+      DAILEY_ASSISTANT_TEST: "1",
       DAILEY_ASSISTANT_HOME: fakeHome,
       DAILEY_ASSISTANT_TEST_BIN: fakeBin
     }
@@ -98,13 +99,9 @@ fi
     await window.getByRole("heading", { name: "Choose your AI platform" }).waitFor({ timeout: 15000 });
     await window.locator(".setup-choice-grid").waitFor({ timeout: 15000 });
 
-    await window.getByRole("button", { name: "Connect Codex" }).click();
+    await window.locator("#ai-apps").getByRole("button", { name: "Connect selected apps" }).click();
     await waitForFile(path.join(fakeHome, ".codex", "config.toml"));
-
-    await window.evaluate(() => window.daileyAssistant.configureClient("claude"));
     await waitForFile(path.join(fakeHome, "Library", "Application Support", "Claude", "claude_desktop_config.json"));
-
-    await window.evaluate(() => window.daileyAssistant.configureClient("opencode"));
     await waitForFile(path.join(fakeHome, ".config", "opencode", "opencode.json"));
 
     const codexConfig = await fs.readFile(path.join(fakeHome, ".codex", "config.toml"), "utf8");

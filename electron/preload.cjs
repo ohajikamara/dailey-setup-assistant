@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld("daileyAssistant", {
   configureCodex: () => ipcRenderer.invoke("assistant:configure-codex"),
   configureClient: (client) => ipcRenderer.invoke("assistant:configure-client", client),
   openTerminal: (command) => ipcRenderer.invoke("assistant:open-terminal", command),
+  startGithubLogin: () => ipcRenderer.invoke("assistant:start-github-login"),
   openUrl: (url) => ipcRenderer.invoke("assistant:open-url", url),
   restartAiApps: (apps) => ipcRenderer.invoke("assistant:restart-ai-apps", apps),
   latestUpdate: () => ipcRenderer.invoke("assistant:latest-update"),

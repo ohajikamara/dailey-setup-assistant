@@ -471,6 +471,111 @@ function streamCommand(event, label, command, args = []) {
   });
 }
 
+function parseGithubDeviceCode(output) {
+  const match = String(output || "").match(/\b([A-Z0-9]{4}-[A-Z0-9]{4})\b/);
+  return match ? match[1] : "";
+}
+
+function parseGithubLoginUrl(output) {
+  const match = String(output || "").match(/https:\/\/github\.com\/login\/device\b/);
+  return match ? match[0] : "https://github.com/login/device";
+}
+
+async function startGithubLogin(event) {
+  const gh = await commandVersion("gh");
+  if (!gh.found) {
+    return {
+      ok: false,
+      detail: "GitHub CLI is not installed yet. Prepare this Mac first, then try GitHub sign-in again."
+    };
+  }
+
+  const existingAuth = await execCommand("gh", ["auth", "status"], { timeout: 8000 });
+  if (existingAuth.ok) {
+    return {
+      ok: true,
+      alreadyConnected: true,
+      detail: `GitHub is already connected: ${firstUsefulLine(existingAuth.stdout)}`
+    };
+  }
+
+  return new Promise((resolve) => {
+    const child = spawn("gh", ["auth", "login", "--web", "--hostname", "github.com", "--git-protocol", "https"], {
+      env: {
+        ...process.env,
+        HOME: homeDir,
+        PATH: commandPath()
+      },
+      shell: false,
+      stdio: ["pipe", "pipe", "pipe"]
+    });
+
+    let settled = false;
+    let pressedEnter = false;
+    let buffer = "";
+
+    const settle = (payload) => {
+      if (settled) return;
+      settled = true;
+      resolve(payload);
+    };
+
+    const handleOutput = (chunk) => {
+      const text = String(chunk || "");
+      buffer += text;
+      event.sender.send("assistant:log", { label: "GitHub sign-in", line: text });
+
+      const code = parseGithubDeviceCode(buffer);
+      const url = parseGithubLoginUrl(buffer);
+      if (code) {
+        shell.openExternal(url);
+        settle({
+          ok: true,
+          code,
+          url,
+          detail: `GitHub opened in your browser. Copy code ${code}, approve access, then return here and press Check again.`
+        });
+      }
+
+      if (!pressedEnter && /press enter/i.test(buffer)) {
+        pressedEnter = true;
+        child.stdin.write("\n");
+      }
+    };
+
+    child.stdout.on("data", handleOutput);
+    child.stderr.on("data", handleOutput);
+    child.on("error", (error) => {
+      settle({
+        ok: false,
+        detail: `Could not start GitHub sign-in: ${error.message}`
+      });
+    });
+    child.on("close", (code) => {
+      const deviceCode = parseGithubDeviceCode(buffer);
+      const statusLine = code === 0 ? "GitHub sign-in finished." : firstUsefulLine(buffer);
+      event.sender.send("assistant:log", { label: "GitHub sign-in", line: statusLine });
+      settle({
+        ok: code === 0,
+        code: deviceCode,
+        url: parseGithubLoginUrl(buffer),
+        detail: code === 0
+          ? "GitHub sign-in finished. Press Check again so the assistant can verify it."
+          : `GitHub sign-in needs attention: ${statusLine}`
+      });
+    });
+
+    setTimeout(() => {
+      const deviceCode = parseGithubDeviceCode(buffer);
+      if (deviceCode) return;
+      settle({
+        ok: false,
+        detail: "GitHub sign-in started, but the assistant could not read a device code yet. Use the Terminal window if it opened, then press Check again."
+      });
+    }, 9000);
+  });
+}
+
 function nextSectionIndex(content, startIndex) {
   const next = content.slice(startIndex + 1).search(/^\[/m);
   return next === -1 ? content.length : startIndex + 1 + next;
@@ -600,6 +705,8 @@ ipcMain.handle("assistant:open-terminal", async (_event, command) => {
   return openTerminalCommand(command);
 });
 
+ipcMain.handle("assistant:start-github-login", startGithubLogin);
+
 ipcMain.handle("assistant:open-url", async (_event, url) => {
   await shell.openExternal(url);
   return { ok: true };
@@ -663,6 +770,13 @@ ipcMain.handle("assistant:latest-update", async () => {
 });
 
 ipcMain.handle("assistant:restart-ai-apps", async (_event, apps = []) => {
+  if (process.env.DAILEY_ASSISTANT_TEST === "1") {
+    return {
+      ok: true,
+      detail: `Test mode skipped opening ${apps.length || 0} AI app${apps.length === 1 ? "" : "s"}.`
+    };
+  }
+
   if (process.platform !== "darwin") {
     return { ok: false, detail: "Automatic app reload is currently available on macOS only." };
   }

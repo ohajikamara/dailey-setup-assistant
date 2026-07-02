@@ -8,8 +8,10 @@ import {
   CircleHelp,
   Cloud,
   Code2,
+  Copy,
   Cpu,
   Download,
+  ExternalLink,
   FileCheck2,
   FileText,
   GitBranch,
@@ -77,6 +79,7 @@ const api = window.daileyAssistant || {
     throw new Error("Configuration is available in the desktop app.");
   },
   openTerminal: async () => ({ ok: false }),
+  startGithubLogin: async () => ({ ok: false, detail: "Guided GitHub sign-in is available in the desktop app." }),
   openUrl: async (url) => window.open(url, "_blank", "noopener,noreferrer"),
   restartAiApps: async () => ({ ok: false, detail: "Reload is available in the desktop app." }),
   latestUpdate: async () => ({
@@ -890,7 +893,7 @@ function FocusedStatusPanel({ stage, diagnostics, connectedAiIds }) {
   );
 }
 
-function AIPlatformChooser({ diagnostics, configureClient, busyAction }) {
+function AIPlatformChooser({ diagnostics, configureClient, busyAction, selectedAiIds, onToggleClient, onConnectSelected }) {
   const cards = clientCards.map((client) => {
     const state = diagnostics?.clients?.[client.id];
     const installed = Boolean(state?.installed);
@@ -904,40 +907,122 @@ function AIPlatformChooser({ diagnostics, configureClient, busyAction }) {
       detail: state?.detail || client.description
     };
   });
+  const availableCount = cards.filter((client) => client.installed && !client.connected).length;
+  const selectedCount = selectedAiIds.length;
 
   return (
-    <div className="setup-choice-grid" id="ai-apps">
-      {cards.map((client) => (
-        <div className={`setup-choice-card ${client.accent} ${client.connected ? "connected" : ""}`} key={client.id}>
-          <div className="setup-choice-icon">{client.icon}</div>
-          <h3>{client.name}</h3>
-          <p>{client.missing ? client.detail : client.description}</p>
-          {client.missing ? (
-            <button className="install-text-link" onClick={() => api.openUrl(client.installUrl)}>
-              <Link aria-hidden="true" />
-              <span>Install {client.shortName}</span>
-            </button>
-          ) : (
-            <Button
-              icon={client.connected ? <CheckCircle2 aria-hidden="true" /> : <Link aria-hidden="true" />}
-              onClick={() => configureClient(client.id)}
-              busy={busyAction === client.id}
-              disabled={!diagnostics || client.connected}
-            >
-              {client.connected ? "Connected" : `Connect ${client.shortName}`}
-            </Button>
-          )}
+    <div className="setup-ai-picker" id="ai-apps">
+      <div className="setup-ai-toolbar">
+        <div>
+          <strong>Select every AI app you want to use</strong>
+          <span>
+            {availableCount > 0
+              ? `${selectedCount} of ${availableCount} available app${availableCount === 1 ? "" : "s"} selected.`
+              : "Install a supported AI app first, then come back here."}
+          </span>
         </div>
-      ))}
+        <Button
+          icon={<Link aria-hidden="true" />}
+          variant="hero"
+          onClick={onConnectSelected}
+          busy={busyAction === "ai-batch"}
+          disabled={!diagnostics || selectedCount === 0}
+        >
+          Connect selected apps
+        </Button>
+      </div>
+      <div className="setup-choice-grid">
+        {cards.map((client) => {
+          const selectable = diagnostics && client.installed && !client.connected;
+          const checked = client.connected || selectedAiIds.includes(client.id);
+          return (
+            <label className={`setup-choice-card ${client.accent} ${client.connected ? "connected" : ""} ${client.missing ? "missing" : ""}`} key={client.id}>
+              <input
+                type="checkbox"
+                checked={checked}
+                disabled={!selectable}
+                onChange={() => onToggleClient(client.id)}
+              />
+              <div className="setup-choice-icon">{client.icon}</div>
+              <h3>{client.name}</h3>
+              <p>{client.missing ? client.detail : client.description}</p>
+              {client.connected && (
+                <span className="choice-status ready-choice"><CheckCircle2 aria-hidden="true" /> Connected</span>
+              )}
+              {client.missing ? (
+                <button className="install-text-link" type="button" onClick={() => api.openUrl(client.installUrl)}>
+                  <Link aria-hidden="true" />
+                  <span>Install {client.shortName}</span>
+                </button>
+              ) : !client.connected ? (
+                <Button
+                  icon={<Link aria-hidden="true" />}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    configureClient(client.id);
+                  }}
+                  busy={busyAction === client.id}
+                  disabled={!diagnostics}
+                >
+                  Connect only {client.shortName}
+                </Button>
+              ) : null}
+            </label>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
-function FocusedStepScreen({ activeStage, stages, loading, busyAction, diagnostics, configureClient, connectedAiIds, message, onRefresh }) {
+function GithubLoginGuide({ githubLogin, onCopyCode, onOpenDevicePage }) {
+  return (
+    <div className="github-login-guide">
+      <div className="github-guide-heading">
+        <GitBranch aria-hidden="true" />
+        <div>
+          <strong>What will happen next</strong>
+          <span>The assistant starts GitHub's official sign-in and opens the browser page for you.</span>
+        </div>
+      </div>
+      <div className="github-guide-steps">
+        <div>
+          <span>1</span>
+          <p>Click the blue sign-in button on this page.</p>
+        </div>
+        <div>
+          <span>2</span>
+          <p>If GitHub asks for a device code, copy the code shown below.</p>
+        </div>
+        <div>
+          <span>3</span>
+          <p>Paste it into the GitHub page that opens, approve access, then return here and press Check again.</p>
+        </div>
+      </div>
+      <div className="github-code-box">
+        <div>
+          <span>GitHub code</span>
+          <strong>{githubLogin?.code || "Waiting for sign-in to start"}</strong>
+        </div>
+        <div className="github-code-actions">
+          <Button icon={<Copy aria-hidden="true" />} onClick={onCopyCode} disabled={!githubLogin?.code}>
+            Copy code
+          </Button>
+          <Button icon={<ExternalLink aria-hidden="true" />} onClick={onOpenDevicePage}>
+            Open GitHub page
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FocusedStepScreen({ activeStage, stages, loading, busyAction, diagnostics, configureClient, connectedAiIds, message, onRefresh, githubLogin, onCopyGithubCode, onOpenGithubDevicePage, selectedAiIds, onToggleAiClient, onConnectSelectedAiApps }) {
   if (!activeStage) return null;
 
   const stepCount = stages.length || setupStepLabels.length;
   const showAiChooser = activeStage.id === "ai";
+  const showGithubGuide = activeStage.id === "github";
   const actionBusy = loading ||
     (activeStage.id === "dailey" && busyAction === "dailey") ||
     (activeStage.id === "github" && busyAction === "github") ||
@@ -971,7 +1056,20 @@ function FocusedStepScreen({ activeStage, stages, loading, busyAction, diagnosti
         </div>
         {message && <div className="message setup-message">{message}</div>}
         {showAiChooser ? (
-          <AIPlatformChooser diagnostics={diagnostics} configureClient={configureClient} busyAction={busyAction} />
+          <AIPlatformChooser
+            diagnostics={diagnostics}
+            configureClient={configureClient}
+            busyAction={busyAction}
+            selectedAiIds={selectedAiIds}
+            onToggleClient={onToggleAiClient}
+            onConnectSelected={onConnectSelectedAiApps}
+          />
+        ) : showGithubGuide ? (
+          <GithubLoginGuide
+            githubLogin={githubLogin}
+            onCopyCode={onCopyGithubCode}
+            onOpenDevicePage={onOpenGithubDevicePage}
+          />
         ) : (
           <FocusedStatusPanel stage={activeStage} diagnostics={diagnostics} connectedAiIds={connectedAiIds} />
         )}
@@ -1195,6 +1293,8 @@ function App() {
   const [aiReloaded, setAiReloaded] = useState(false);
   const [finalChecked, setFinalChecked] = useState(false);
   const [hasStartedSetup, setHasStartedSetup] = useState(false);
+  const [githubLogin, setGithubLogin] = useState(null);
+  const [selectedAiIds, setSelectedAiIds] = useState([]);
   const [theme, setTheme] = useState(() => localStorage.getItem("dailey-theme") || "light");
   const [modal, setModal] = useState("");
   const [settings, setSettings] = useState(() => {
@@ -1210,14 +1310,17 @@ function App() {
     }
   });
 
-  async function refresh() {
+  async function refresh(options = {}) {
+    const { clearMessage = true } = options;
     setLoading(true);
-    setMessage("");
+    if (clearMessage) setMessage("");
     try {
       const data = await api.diagnostics();
       setDiagnostics(data);
+      return data;
     } catch (error) {
       setMessage(`Could not run diagnostics: ${error.message}`);
+      return null;
     } finally {
       setLoading(false);
     }
@@ -1255,6 +1358,17 @@ function App() {
     localStorage.setItem("dailey-settings", JSON.stringify(settings));
   }, [settings]);
 
+  useEffect(() => {
+    if (!diagnostics) return;
+    const availableIds = clientCards
+      .filter((client) => diagnostics.clients[client.id]?.installed && !diagnostics.clients[client.id]?.daileyBlockLooksValid)
+      .map((client) => client.id);
+    setSelectedAiIds((current) => {
+      const stillAvailable = current.filter((id) => availableIds.includes(id));
+      return stillAvailable.length > 0 ? stillAvailable : availableIds;
+    });
+  }, [diagnostics]);
+
   const score = useMemo(() => {
     if (!diagnostics) return { good: 0, total: 9 };
     const hasConnectedAiApp = Object.values(diagnostics.clients).some((client) => client.installed && client.daileyBlockLooksValid);
@@ -1283,14 +1397,16 @@ function App() {
       ? "No supported AI app was found on this Mac yet. Choose one of the supported apps below if you want Dailey tools there."
       : installedAiCards.length === 1
       ? `${installedAiCards[0].name} was found on this Mac. Connect Dailey to it now.`
-      : `${installedAiNames} were found on this Mac. Choose which one should get Dailey tools.`;
+      : `${installedAiNames} were found on this Mac. Select every app you want to use, then connect them together.`;
     const aiStepAction = firstUnconfiguredAiApp && installedAiCards.length === 1
       ? `Connect ${firstUnconfiguredAiApp.shortName}`
       : installedAiCards.length === 0
       ? "See install links"
-      : "Choose found app";
+      : "Connect selected apps";
     const aiStepActionHandler = firstUnconfiguredAiApp && installedAiCards.length === 1
       ? () => configureClient(firstUnconfiguredAiApp.id)
+      : selectedAiIds.length > 0
+      ? connectSelectedAiApps
       : () => document.getElementById("ai-apps")?.scrollIntoView({ behavior: "smooth" });
     const items = [
       {
@@ -1309,10 +1425,10 @@ function App() {
         number: 2,
         title: "Sign in to GitHub",
         body: "Connect the GitHub account that can access the websites or apps you want Dailey to deploy.",
-        helper: "This prototype uses GitHub's official CLI sign-in. A production version should use native GitHub OAuth so the terminal disappears.",
+        helper: "The assistant opens GitHub's official sign-in page and shows the device code here so Terminal is not a mystery.",
         complete: diagnostics.accounts.github.connected,
-        action: "Sign in to GitHub",
-        onAction: () => openTerminal("gh auth login", "github"),
+        action: "Start guided GitHub sign-in",
+        onAction: startGithubLogin,
         icon: <GitBranch aria-hidden="true" />
       },
       {
@@ -1331,9 +1447,9 @@ function App() {
         number: 4,
         title: "Reload your AI app",
         body: "Reload the AI app you connected so it can pick up the new Dailey tools.",
-        helper: "AI apps usually read connector settings only when they open. This button tries to do the reload for you.",
+        helper: "The assistant opens connected AI apps for you. Use this only if one did not reopen after connection.",
         complete: aiReloaded,
-        action: "Reload AI app",
+        action: "Open connected AI apps",
         onAction: reloadAiApps,
         icon: <RefreshCw aria-hidden="true" />
       },
@@ -1355,7 +1471,7 @@ function App() {
       ...item,
       state: item.complete ? "done" : index === firstIncompleteIndex ? "active" : "waiting"
     }));
-  }, [diagnostics, aiReloaded, finalChecked]);
+  }, [diagnostics, aiReloaded, finalChecked, selectedAiIds]);
 
   const prerequisitesReady = Boolean(
     diagnostics?.tools.node.found &&
@@ -1404,15 +1520,98 @@ function App() {
     try {
       const result = await api.configureClient(client);
       const clientName = clientCards.find((item) => item.id === client)?.name || client;
-      setMessage(`${clientName} is connected. Backup created at ${result.backupPath}`);
-      setAiReloaded(false);
+      const reloadResult = await api.restartAiApps([client]);
+      setMessage(reloadResult.ok
+        ? `${clientName} is connected and opened for you. Backup created at ${result.backupPath}`
+        : `${clientName} is connected. Backup created at ${result.backupPath}. Automatic app opening needs attention: ${reloadResult.detail}`);
+      setAiReloaded(Boolean(reloadResult.ok));
       setFinalChecked(false);
-      await refresh();
+      await refresh({ clearMessage: false });
     } catch (error) {
       setMessage(`Could not update config: ${error.message}`);
     } finally {
       setBusyAction("");
     }
+  }
+
+  async function connectSelectedAiApps() {
+    if (selectedAiIds.length === 0) {
+      setMessage("Choose at least one installed AI app first.");
+      return;
+    }
+
+    setBusyAction("ai-batch");
+    setMessage("Connecting selected AI apps and creating safety backups...");
+    const successes = [];
+    const failures = [];
+
+    try {
+      for (const client of selectedAiIds) {
+        const clientName = clientCards.find((item) => item.id === client)?.name || client;
+        try {
+          await api.configureClient(client);
+          successes.push(client);
+        } catch (error) {
+          failures.push(`${clientName}: ${error.message}`);
+        }
+      }
+
+      setFinalChecked(false);
+      const connectedNames = successes
+        .map((id) => clientCards.find((item) => item.id === id)?.name || id)
+        .join(", ");
+      let reloadDetail = "";
+      if (successes.length > 0) {
+        try {
+          const reloadResult = await api.restartAiApps(successes);
+          setAiReloaded(Boolean(reloadResult.ok));
+          reloadDetail = reloadResult.ok
+            ? ` Opened ${connectedNames} for you.`
+            : ` Connected ${connectedNames}, but automatic app opening needs a manual check: ${reloadResult.detail}`;
+        } catch (error) {
+          setAiReloaded(false);
+          reloadDetail = ` Connected ${connectedNames}, but automatic app opening failed: ${error.message}`;
+        }
+      }
+
+      const failureDetail = failures.length > 0 ? ` Some apps need attention: ${failures.join(" | ")}` : "";
+      setMessage(`${successes.length} app${successes.length === 1 ? "" : "s"} connected.${reloadDetail}${failureDetail}`);
+      await refresh({ clearMessage: false });
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  function toggleAiClient(clientId) {
+    setSelectedAiIds((current) => current.includes(clientId)
+      ? current.filter((id) => id !== clientId)
+      : [...current, clientId]);
+  }
+
+  async function startGithubLogin() {
+    setBusyAction("github");
+    setMessage("Starting guided GitHub sign-in...");
+    setGithubLogin(null);
+    try {
+      const result = await api.startGithubLogin();
+      setGithubLogin(result);
+      setMessage(result.detail || "GitHub sign-in started. Use the code shown here, then come back and press Check again.");
+      if (result.alreadyConnected) await refresh({ clearMessage: false });
+    } catch (error) {
+      setMessage(`Could not start guided GitHub sign-in: ${error.message}. Use the fallback Terminal login if needed.`);
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function copyGithubCode() {
+    if (!githubLogin?.code) return;
+    await navigator.clipboard.writeText(githubLogin.code);
+    setMessage(`Copied GitHub code ${githubLogin.code}. Paste it into the GitHub page, then return here.`);
+  }
+
+  function openGithubDevicePage() {
+    api.openUrl(githubLogin?.url || "https://github.com/login/device");
   }
 
   async function openTerminal(command, label) {
@@ -1469,15 +1668,15 @@ function App() {
     setMessage("");
     try {
       const result = await api.restartAiApps(connectedAiIds);
-      setAiReloaded(true);
+      setAiReloaded(Boolean(result.ok));
       setFinalChecked(false);
       setMessage(result.ok
         ? `Reload attempted: ${result.detail}. Run the final check when the app reopens.`
         : `${result.detail} If needed, close and reopen your AI app manually.`);
-      await refresh();
+      await refresh({ clearMessage: false });
     } catch (error) {
       setMessage(`Could not reload AI apps automatically. Close and reopen your AI app manually, then run the final check. ${error.message}`);
-      setAiReloaded(true);
+      setAiReloaded(false);
       setFinalChecked(false);
     } finally {
       setBusyAction("");
@@ -1487,9 +1686,14 @@ function App() {
   async function runFinalCheck() {
     setBusyAction("finish");
     try {
-      await refresh();
+      const latestDiagnostics = await refresh({ clearMessage: false });
       setFinalChecked(true);
-      setMessage("Setup is complete. Your dashboard is ready.");
+      const data = latestDiagnostics || diagnostics;
+      const hasAiApp = Boolean(data && Object.values(data.clients).some((client) => client.installed && client.daileyBlockLooksValid));
+      const ready = Boolean(data?.accounts.dailey.connected && data?.accounts.github.connected && hasAiApp && aiReloaded);
+      setMessage(ready
+        ? "Setup is complete. Opening your dashboard now."
+        : "Final check finished. One setup item still needs attention before the dashboard opens.");
     } finally {
       setBusyAction("");
     }
@@ -1562,6 +1766,12 @@ function App() {
                 connectedAiIds={connectedAiIds}
                 message={message}
                 onRefresh={refresh}
+                githubLogin={githubLogin}
+                onCopyGithubCode={copyGithubCode}
+                onOpenGithubDevicePage={openGithubDevicePage}
+                selectedAiIds={selectedAiIds}
+                onToggleAiClient={toggleAiClient}
+                onConnectSelectedAiApps={connectSelectedAiApps}
               />
             ) : (
               <WelcomeScreen
