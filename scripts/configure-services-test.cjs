@@ -94,8 +94,9 @@ fi
     const window = await app.firstWindow();
     await window.waitForLoadState("domcontentloaded");
     await window.getByText("Dailey Setup Assistant").first().waitFor({ timeout: 15000 });
-    await window.locator(".ai-group-title strong", { hasText: "Found on this Mac" }).waitFor({ timeout: 15000 });
-    await window.getByText("3 supported apps found on this Mac.").waitFor({ timeout: 15000 });
+    await window.getByRole("button", { name: "Begin setup" }).click();
+    await window.getByRole("heading", { name: "Choose your AI platform" }).waitFor({ timeout: 15000 });
+    await window.locator(".setup-choice-grid").waitFor({ timeout: 15000 });
 
     await window.getByRole("button", { name: "Connect Codex" }).click();
     await waitForFile(path.join(fakeHome, ".codex", "config.toml"));

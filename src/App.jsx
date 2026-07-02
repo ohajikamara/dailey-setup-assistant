@@ -127,6 +127,27 @@ function TopBar({ ready, loading, onRefresh, onToggleTheme, onOpenHelp, onOpenSe
   );
 }
 
+function SetupTopBar({ onToggleTheme, onOpenHelp, onOpenSettings, theme }) {
+  return (
+    <header className="topbar setup-topbar">
+      <div className="traffic-lights" aria-hidden="true">
+        <span className="red" />
+        <span className="yellow" />
+        <span className="green" />
+      </div>
+      <div className="top-title">
+        <LogoMark size="tiny" />
+        <strong>Dailey Setup Assistant</strong>
+      </div>
+      <div className="top-controls">
+        <IconButton icon={theme === "dark" ? <Sun /> : <Moon />} label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} onClick={onToggleTheme} />
+        <IconButton icon={<CircleHelp />} label="Help" onClick={onOpenHelp} />
+        <IconButton icon={<Settings />} label="Settings" onClick={onOpenSettings} />
+      </div>
+    </header>
+  );
+}
+
 function Sidebar({ diagnostics, loading, onOpenSettings, stages = [], activeStage, setupComplete }) {
   const daileyConnected = Boolean(diagnostics?.accounts?.dailey?.connected);
   const accountTitle = loading
@@ -676,46 +697,165 @@ function StageLogCard({ stage, logs, onOpenFullLog, showSampleLogs }) {
   );
 }
 
-function SetupIntroPanel({ activeStage }) {
+function WelcomeScreen({ onBegin }) {
   return (
-    <section className="setup-intro-panel" id="overview">
-      <div>
-        <span>{activeStage?.kicker || "Setup assistant"}</span>
-        <h1>Connect Dailey in five guided steps.</h1>
-        <p>The assistant will keep the screen focused on the step you are handling now, then reveal the full dashboard after setup is complete.</p>
+    <section className="setup-welcome-screen" id="overview">
+      <div className="welcome-visual" aria-hidden="true">
+        <img src={introHero} alt="" />
       </div>
-      <img src={introHero} alt="" aria-hidden="true" />
+      <div className="setup-welcome-copy">
+        <span>Welcome</span>
+        <h1>Let's set up Dailey on this Mac.</h1>
+        <p>We will go one step at a time: Dailey, GitHub, your AI app, then a final check. Nothing else appears until it is needed.</p>
+        <Button variant="hero" icon={<ChevronRight aria-hidden="true" />} onClick={onBegin}>
+          Begin setup
+        </Button>
+      </div>
     </section>
   );
 }
 
-function SetupWorkspace({ activeStage, stages, loading, busyAction, diagnostics, configureClient, logs, settings, onOpenFullLog, connectedAiIds }) {
-  const showAiChooser = activeStage?.id === "ai";
-  const actionBusy = loading ||
-    (activeStage?.id === "dailey" && busyAction === "dailey") ||
-    (activeStage?.id === "github" && busyAction === "github") ||
-    (activeStage?.id === "reload" && busyAction === "reload") ||
-    (activeStage?.id === "finish" && busyAction === "finish");
+function SetupDots({ stages, activeStage }) {
+  const visibleStages = stages.length > 0
+    ? stages
+    : setupStepLabels.map((title, index) => ({
+      id: title,
+      number: index + 1,
+      title,
+      complete: false,
+      state: activeStage?.number === index + 1 ? "active" : "waiting"
+    }));
 
   return (
-    <>
-      <SetupIntroPanel activeStage={activeStage} />
-      <StepTracker stages={stages} />
-      <GuidedStepCard activeStage={activeStage} stages={stages} loading={actionBusy} />
-      <div className={`stage-focus-grid ${showAiChooser ? "wide" : ""}`}>
-        {showAiChooser ? (
-          <AIAppConnectionsCard diagnostics={diagnostics} configureClient={configureClient} busyAction={busyAction} />
-        ) : (
-          <StageReportCard stage={activeStage} diagnostics={diagnostics} connectedAiIds={connectedAiIds} />
-        )}
-        <StageLogCard
-          stage={activeStage}
-          logs={logs}
-          onOpenFullLog={onOpenFullLog}
-          showSampleLogs={settings.showSampleLogs}
+    <div className="setup-dots" aria-label="Setup progress">
+      {visibleStages.map((stage) => (
+        <span
+          className={`${stage.state} ${activeStage?.id === stage.id ? "active" : ""}`}
+          title={stage.title}
+          key={stage.id}
         />
+      ))}
+    </div>
+  );
+}
+
+function focusedStageRows(stage, diagnostics, connectedAiIds) {
+  const rows = stageReportRows(stage, diagnostics, connectedAiIds);
+
+  if (stage?.id === "dailey") return rows.filter(([label]) => label === "Dailey account");
+  if (stage?.id === "github") return rows.filter(([label]) => label === "GitHub sign-in");
+  if (stage?.id === "ai") return [];
+  if (stage?.id === "loading") return rows.slice(0, 1);
+  return rows.slice(0, 3);
+}
+
+function FocusedStatusPanel({ stage, diagnostics, connectedAiIds }) {
+  const rows = focusedStageRows(stage, diagnostics, connectedAiIds);
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="focused-status-panel">
+      {rows.map(([label, detail, ready, icon]) => (
+        <div className="focused-status-row" key={label}>
+          <div className={ready ? "ready" : "pending"}>{icon}</div>
+          <div>
+            <strong>{label}</strong>
+            <span>{detail}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AIPlatformChooser({ diagnostics, configureClient, busyAction }) {
+  const cards = clientCards.map((client) => {
+    const state = diagnostics?.clients?.[client.id];
+    const installed = Boolean(state?.installed);
+    const connected = Boolean(installed && state?.daileyBlockLooksValid);
+    const missing = Boolean(diagnostics && !installed);
+    return {
+      ...client,
+      installed,
+      connected,
+      missing,
+      detail: state?.detail || client.description
+    };
+  });
+
+  return (
+    <div className="setup-choice-grid" id="ai-apps">
+      {cards.map((client) => (
+        <div className={`setup-choice-card ${client.accent} ${client.connected ? "connected" : ""}`} key={client.id}>
+          <div className="setup-choice-icon">{client.icon}</div>
+          <h3>{client.name}</h3>
+          <p>{client.missing ? client.detail : client.description}</p>
+          {client.missing ? (
+            <button className="install-text-link" onClick={() => api.openUrl(client.installUrl)}>
+              <Link aria-hidden="true" />
+              <span>Install {client.shortName}</span>
+            </button>
+          ) : (
+            <Button
+              icon={client.connected ? <CheckCircle2 aria-hidden="true" /> : <Link aria-hidden="true" />}
+              onClick={() => configureClient(client.id)}
+              busy={busyAction === client.id}
+              disabled={!diagnostics || client.connected}
+            >
+              {client.connected ? "Connected" : `Connect ${client.shortName}`}
+            </Button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function FocusedStepScreen({ activeStage, stages, loading, busyAction, diagnostics, configureClient, connectedAiIds, message, onRefresh }) {
+  if (!activeStage) return null;
+
+  const stepCount = stages.length || setupStepLabels.length;
+  const showAiChooser = activeStage.id === "ai";
+  const actionBusy = loading ||
+    (activeStage.id === "dailey" && busyAction === "dailey") ||
+    (activeStage.id === "github" && busyAction === "github") ||
+    (activeStage.id === "reload" && busyAction === "reload") ||
+    (activeStage.id === "finish" && busyAction === "finish") ||
+    (activeStage.id === "prepare" && busyAction === "prepare");
+  const canCheckAgain = ["dailey", "github"].includes(activeStage.id);
+
+  return (
+    <section className={`setup-step-screen stage-${activeStage.id}`}>
+      <div className="setup-step-shell">
+        <div className="step-orb" aria-hidden="true">{activeStage.icon}</div>
+        <span className="setup-step-kicker">{activeStage.kicker || `Step ${activeStage.number} of ${stepCount}`}</span>
+        <h1>{activeStage.title}</h1>
+        <p>{activeStage.body}</p>
+        <small>{activeStage.helper}</small>
+        <div className="setup-step-actions">
+          <Button
+            variant="hero"
+            icon={activeStage.icon}
+            onClick={activeStage.onAction}
+            busy={actionBusy}
+          >
+            {activeStage.action}
+          </Button>
+          {canCheckAgain && (
+            <Button icon={<RefreshCw aria-hidden="true" />} onClick={onRefresh} busy={loading}>
+              Check again
+            </Button>
+          )}
+        </div>
+        {message && <div className="message setup-message">{message}</div>}
+        {showAiChooser ? (
+          <AIPlatformChooser diagnostics={diagnostics} configureClient={configureClient} busyAction={busyAction} />
+        ) : (
+          <FocusedStatusPanel stage={activeStage} diagnostics={diagnostics} connectedAiIds={connectedAiIds} />
+        )}
       </div>
-    </>
+      <SetupDots stages={stages} activeStage={activeStage} />
+    </section>
   );
 }
 
@@ -931,6 +1071,7 @@ function App() {
   const [message, setMessage] = useState("");
   const [aiReloaded, setAiReloaded] = useState(false);
   const [finalChecked, setFinalChecked] = useState(false);
+  const [hasStartedSetup, setHasStartedSetup] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem("dailey-theme") || "light");
   const [modal, setModal] = useState("");
   const [settings, setSettings] = useState(() => {
@@ -1185,54 +1326,69 @@ function App() {
 
   return (
     <main className={`app-shell ${theme} ${settings.compact ? "compact-mode" : ""}`}>
-      <TopBar
-        ready={allReady}
-        loading={loading}
-        onRefresh={refresh}
-        onToggleTheme={() => setTheme((current) => current === "dark" ? "light" : "dark")}
-        onOpenHelp={() => setModal("help")}
-        onOpenSettings={() => setModal("settings")}
-        theme={theme}
-      />
-      <div className="app-body">
-        <Sidebar
-          diagnostics={diagnostics}
-          loading={loading}
-          onOpenSettings={() => setModal("settings")}
-          stages={stages}
-          activeStage={activeStage}
-          setupComplete={setupComplete}
-        />
-        <section className="main-content">
-          {message && <div className="message">{message}</div>}
-          {setupComplete ? (
-            <DashboardView
+      {setupComplete ? (
+        <>
+          <TopBar
+            ready={allReady}
+            loading={loading}
+            onRefresh={refresh}
+            onToggleTheme={() => setTheme((current) => current === "dark" ? "light" : "dark")}
+            onOpenHelp={() => setModal("help")}
+            onOpenSettings={() => setModal("settings")}
+            theme={theme}
+          />
+          <div className="app-body">
+            <Sidebar
               diagnostics={diagnostics}
-              score={score}
+              loading={loading}
+              onOpenSettings={() => setModal("settings")}
               stages={stages}
-              configureClient={configureClient}
-              busyAction={busyAction}
-              openTerminal={openTerminal}
-              logs={logs}
-              settings={settings}
-              onOpenFullLog={() => setModal("logs")}
-            />
-          ) : (
-            <SetupWorkspace
               activeStage={activeStage}
-              stages={stages}
-              loading={loading || (activeStage?.id === "prepare" && busyAction === "prepare") || (activeStage?.id === "reload" && busyAction === "reload") || (activeStage?.id === "finish" && busyAction === "finish")}
-              busyAction={busyAction}
-              diagnostics={diagnostics}
-              configureClient={configureClient}
-              logs={logs}
-              settings={settings}
-              onOpenFullLog={() => setModal("logs")}
-              connectedAiIds={connectedAiIds}
+              setupComplete={setupComplete}
             />
-          )}
-        </section>
-      </div>
+            <section className="main-content">
+              {message && <div className="message">{message}</div>}
+              <DashboardView
+                diagnostics={diagnostics}
+                score={score}
+                stages={stages}
+                configureClient={configureClient}
+                busyAction={busyAction}
+                openTerminal={openTerminal}
+                logs={logs}
+                settings={settings}
+                onOpenFullLog={() => setModal("logs")}
+              />
+            </section>
+          </div>
+        </>
+      ) : (
+        <>
+          <SetupTopBar
+            onToggleTheme={() => setTheme((current) => current === "dark" ? "light" : "dark")}
+            onOpenHelp={() => setModal("help")}
+            onOpenSettings={() => setModal("settings")}
+            theme={theme}
+          />
+          <div className="setup-only-shell">
+            {hasStartedSetup ? (
+              <FocusedStepScreen
+                activeStage={activeStage}
+                stages={stages}
+                loading={loading}
+                busyAction={busyAction}
+                diagnostics={diagnostics}
+                configureClient={configureClient}
+                connectedAiIds={connectedAiIds}
+                message={message}
+                onRefresh={refresh}
+              />
+            ) : (
+              <WelcomeScreen onBegin={() => setHasStartedSetup(true)} />
+            )}
+          </div>
+        </>
+      )}
       {modal === "help" && (
         <HelpGuide
           onClose={() => setModal("")}

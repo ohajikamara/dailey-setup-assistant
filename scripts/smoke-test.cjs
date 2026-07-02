@@ -33,26 +33,31 @@ async function main() {
     await window.reload();
     await window.waitForLoadState("domcontentloaded");
     await window.getByText("Dailey Setup Assistant").first().waitFor({ timeout: 15000 });
-    await window.locator(".setup-intro-panel h1").waitFor({ timeout: 15000 });
-    await window.getByText(/Step [1-5] of 5|Getting things ready|Setup path/).first().waitFor({ timeout: 15000 });
-    await window.getByText("Setup path").waitFor({ timeout: 15000 });
-    await window.getByText(/Report/).first().waitFor({ timeout: 15000 });
-    await window.getByText(/Log/).first().waitFor({ timeout: 15000 });
+    await window.getByRole("heading", { name: "Let us set up Dailey on this Mac." }).waitFor({ timeout: 15000 });
+    await window.getByRole("button", { name: "Begin setup" }).waitFor({ timeout: 15000 });
 
     const bodyText = await window.locator("body").innerText();
     const expected = [
-      "Sign in to Dailey",
-      "Sign in to GitHub",
-      "Choose your AI platform",
-      "Reload your AI app",
-      "Finish setup",
-      "Setup path",
-      "Report",
-      "Log"
+      "Welcome",
+      "Let us set up Dailey on this Mac.",
+      "Begin setup"
     ];
     const missing = expected.filter((text) => !bodyText.includes(text));
     if (missing.length > 0) {
       throw new Error(`Missing expected text: ${missing.join(", ")}`);
+    }
+    if (bodyText.includes("Setup path") || bodyText.includes("Full Diagnostics")) {
+      throw new Error("Welcome screen should not show dashboard or setup-sidebar content");
+    }
+
+    await window.screenshot({ path: screenshotPath, fullPage: true });
+    await window.getByRole("button", { name: "Begin setup" }).click();
+    await window.locator(".setup-step-screen").waitFor({ timeout: 15000 });
+    await window.getByText(/Step [1-5] of 5|Getting things ready|Preparation/).first().waitFor({ timeout: 15000 });
+    await window.locator(".step-orb").waitFor({ timeout: 15000 });
+    const stepText = await window.locator("body").innerText();
+    if (stepText.includes("Setup path") || stepText.includes("Full Diagnostics") || stepText.includes("Overall Progress")) {
+      throw new Error("Focused setup screen should not expose dashboard scaffolding");
     }
 
     await window.getByRole("button", { name: "Help" }).click();
@@ -71,11 +76,6 @@ async function main() {
     await window.screenshot({ path: settingsScreenshotPath, fullPage: true });
     await window.getByRole("button", { name: "Close" }).click();
 
-    await window.getByRole("button", { name: "View full log" }).click();
-    await window.getByRole("dialog", { name: "Full Installer Log" }).waitFor({ timeout: 10000 });
-    await window.getByText(/No installer output yet\.|Checking system requirements|Step-specific status|Reading existing Dailey/).first().waitFor({ timeout: 10000 });
-    await window.getByRole("button", { name: "Close" }).click();
-
     await window.getByRole("button", { name: "Switch to light mode" }).click();
     await window.locator(".app-shell.light").waitFor({ timeout: 10000 });
     await window.evaluate(() => {
@@ -89,10 +89,8 @@ async function main() {
     await window.reload();
     await window.waitForLoadState("domcontentloaded");
     await window.getByText("Dailey Setup Assistant").first().waitFor({ timeout: 15000 });
-    await window.getByText("Sign in to Dailey").first().waitFor({ timeout: 15000 });
+    await window.getByRole("heading", { name: "Let us set up Dailey on this Mac." }).waitFor({ timeout: 15000 });
     await window.evaluate(() => window.scrollTo(0, 0));
-
-    await window.screenshot({ path: screenshotPath, fullPage: true });
     console.log(`Smoke test passed. Screenshots: ${screenshotPath}, ${helpScreenshotPath}, ${settingsScreenshotPath}`);
   } finally {
     await app.close();
