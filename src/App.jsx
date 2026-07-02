@@ -30,7 +30,46 @@ import "./styles.css";
 import daileyLogo from "./assets/dailey-logo.png";
 import introHero from "./assets/dailey-intro-hero.png";
 
-const api = window.daileyAssistant;
+const browserPreviewDiagnostics = {
+  checkedAt: new Date().toISOString(),
+  platform: {
+    os: "browser preview",
+    arch: "preview",
+    release: "preview"
+  },
+  tools: {
+    node: { found: false, detail: "Available in the desktop app" },
+    npm: { found: false, detail: "Available in the desktop app" },
+    gh: { found: false, detail: "Available in the desktop app" },
+    dailey: { found: false, detail: "Available in the desktop app" },
+    daileyMcp: { found: false, detail: "Available in the desktop app" }
+  },
+  accounts: {
+    github: { connected: false, detail: "Open the desktop app to check GitHub" },
+    dailey: { connected: false, detail: "Open the desktop app to check Dailey" }
+  },
+  clients: {
+    codex: { installed: false, daileyBlockLooksValid: false, detail: "Open the desktop app to check Codex" },
+    claude: { installed: false, daileyBlockLooksValid: false, detail: "Open the desktop app to check Claude Desktop" },
+    opencode: { installed: false, daileyBlockLooksValid: false, detail: "Open the desktop app to check OpenCode" }
+  },
+  projects: {
+    available: false,
+    detail: "Open the desktop app to check Dailey projects"
+  }
+};
+
+const api = window.daileyAssistant || {
+  diagnostics: async () => browserPreviewDiagnostics,
+  configureClient: async () => {
+    throw new Error("Configuration is available in the desktop app.");
+  },
+  openTerminal: async () => ({ ok: false }),
+  openUrl: async (url) => window.open(url, "_blank", "noopener,noreferrer"),
+  restartAiApps: async () => ({ ok: false, detail: "Reload is available in the desktop app." }),
+  installTools: () => {},
+  onLog: () => () => {}
+};
 
 const clientCards = [
   {
