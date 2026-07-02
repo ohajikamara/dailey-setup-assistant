@@ -8,9 +8,17 @@ const jsonc = require("jsonc-parser");
 
 const isDev = process.env.DAILEY_ASSISTANT_DEV === "1";
 const homeDir = process.env.DAILEY_ASSISTANT_HOME || os.homedir();
+const updateRepo = {
+  owner: "ohajikamara",
+  repo: "dailey-setup-assistant"
+};
 let installUpdateWhenReady = false;
 let latestUpdateInfo = null;
 let downloadedUpdateInfo = null;
+let currentUpdateStatus = {
+  status: "idle",
+  detail: "The app has not checked GitHub for updates yet."
+};
 
 function appIconPath() {
   if (app.isPackaged) {
@@ -62,8 +70,88 @@ function createWindow() {
 }
 
 function sendUpdateStatus(payload) {
+  currentUpdateStatus = {
+    ...currentUpdateStatus,
+    ...payload
+  };
   for (const win of BrowserWindow.getAllWindows()) {
-    win.webContents.send("assistant:update-status", payload);
+    win.webContents.send("assistant:update-status", currentUpdateStatus);
+  }
+}
+
+function compareVersions(a, b) {
+  const aParts = String(a || "0").replace(/^v/, "").split(".").map((part) => Number.parseInt(part, 10) || 0);
+  const bParts = String(b || "0").replace(/^v/, "").split(".").map((part) => Number.parseInt(part, 10) || 0);
+  const length = Math.max(aParts.length, bParts.length);
+
+  for (let index = 0; index < length; index += 1) {
+    const diff = (aParts[index] || 0) - (bParts[index] || 0);
+    if (diff !== 0) return diff;
+  }
+
+  return 0;
+}
+
+async function fetchLatestGithubRelease() {
+  const url = `https://api.github.com/repos/${updateRepo.owner}/${updateRepo.repo}/releases/latest`;
+  const response = await fetch(url, {
+    headers: {
+      "Accept": "application/vnd.github+json",
+      "User-Agent": "Dailey-Setup-Assistant"
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`GitHub returned ${response.status} while checking ${url}`);
+  }
+
+  return response.json();
+}
+
+async function checkLatestGithubUpdate({ notifyNoUpdate = false } = {}) {
+  try {
+    const release = await fetchLatestGithubRelease();
+    const latestVersion = String(release.tag_name || release.name || "").replace(/^v/, "");
+    const currentVersion = app.getVersion();
+
+    if (latestVersion && compareVersions(latestVersion, currentVersion) > 0) {
+      latestUpdateInfo = {
+        version: latestVersion,
+        tag: release.tag_name,
+        url: release.html_url
+      };
+      const status = {
+        ok: true,
+        status: "available",
+        currentVersion,
+        version: latestVersion,
+        releaseUrl: release.html_url,
+        detail: `Update available: version ${latestVersion} is ready on GitHub. Click Latest Update to install it.`
+      };
+      sendUpdateStatus(status);
+      return status;
+    }
+
+    latestUpdateInfo = null;
+    downloadedUpdateInfo = null;
+    const status = {
+      ok: true,
+      status: "not-available",
+      currentVersion,
+      version: currentVersion,
+      detail: "You already have the latest version installed."
+    };
+    currentUpdateStatus = status;
+    if (notifyNoUpdate) sendUpdateStatus(status);
+    return status;
+  } catch (error) {
+    const status = {
+      ok: false,
+      status: "error",
+      detail: `Could not check GitHub for updates: ${error.message}`
+    };
+    sendUpdateStatus(status);
+    return status;
   }
 }
 
@@ -136,10 +224,8 @@ function configureAutoUpdates() {
   });
 
   setTimeout(() => {
-    autoUpdater.checkForUpdates().catch((error) => {
-      console.error("Update check failed:", error);
-    });
-  }, 4000);
+    checkLatestGithubUpdate({ notifyNoUpdate: false });
+  }, 1200);
 }
 
 app.whenReady().then(() => {
@@ -712,6 +798,26 @@ ipcMain.handle("assistant:open-url", async (_event, url) => {
   return { ok: true };
 });
 
+ipcMain.handle("assistant:check-latest-update", async () => {
+  if (isDev && !app.isPackaged) {
+    const status = await checkLatestGithubUpdate({ notifyNoUpdate: false });
+    return {
+      ...status,
+      installable: false
+    };
+  }
+
+  if (!app.isPackaged) {
+    return {
+      ok: false,
+      status: "unavailable",
+      detail: "Update checks work after the app is installed from the DMG."
+    };
+  }
+
+  return checkLatestGithubUpdate({ notifyNoUpdate: false });
+});
+
 ipcMain.handle("assistant:latest-update", async () => {
   if (isDev || !app.isPackaged) {
     return {
@@ -742,15 +848,14 @@ ipcMain.handle("assistant:latest-update", async () => {
   }
 
   if (!latestUpdateInfo) {
-    const result = await autoUpdater.checkForUpdates();
-    if (!result?.updateInfo || result.updateInfo.version === app.getVersion()) {
+    const status = await checkLatestGithubUpdate({ notifyNoUpdate: true });
+    if (status.status !== "available") {
       return {
         ok: false,
-        status: "not-available",
-        detail: "You already have the latest version installed."
+        status: status.status,
+        detail: status.detail
       };
     }
-    latestUpdateInfo = result.updateInfo;
   }
 
   sendUpdateStatus({
@@ -759,6 +864,20 @@ ipcMain.handle("assistant:latest-update", async () => {
     percent: 0,
     detail: `Downloading version ${latestUpdateInfo.version} from GitHub...`
   });
+
+  const result = await autoUpdater.checkForUpdates();
+  if (!result?.updateInfo || compareVersions(result.updateInfo.version, app.getVersion()) <= 0) {
+    installUpdateWhenReady = false;
+    latestUpdateInfo = null;
+    const status = {
+      ok: false,
+      status: "not-available",
+      detail: "You already have the latest version installed."
+    };
+    sendUpdateStatus(status);
+    return status;
+  }
+
   await autoUpdater.downloadUpdate();
 
   return {

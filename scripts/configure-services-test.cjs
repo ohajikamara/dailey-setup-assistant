@@ -96,6 +96,12 @@ fi
     await window.waitForLoadState("domcontentloaded");
     await window.getByText("Dailey Setup Assistant").first().waitFor({ timeout: 15000 });
     await window.getByRole("button", { name: "Begin setup" }).click();
+    await window.getByRole("heading", { name: "Sign in to Dailey" }).waitFor({ timeout: 15000 });
+    await window.getByText("Dailey is already connected on this Mac.").waitFor({ timeout: 15000 });
+    await window.getByRole("button", { name: "Continue to GitHub" }).click();
+    await window.getByRole("heading", { name: "Sign in to GitHub" }).waitFor({ timeout: 15000 });
+    await window.getByText("GitHub is already connected on this Mac.").waitFor({ timeout: 15000 });
+    await window.getByRole("button", { name: "Continue to AI platform" }).click();
     await window.getByRole("heading", { name: "Choose your AI platform" }).waitFor({ timeout: 15000 });
     await window.locator(".setup-choice-grid").waitFor({ timeout: 15000 });
 

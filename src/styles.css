@@ -162,6 +162,12 @@ h3 {
   border-color: rgba(173, 194, 223, 0.18);
 }
 
+.app-shell.dark .step-ready-note {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(74, 222, 128, 0.24);
+  color: #bbf7d0;
+}
+
 .app-shell.dark .hero {
   background: linear-gradient(135deg, #0c1b30 0%, #102a47 54%, #103f60 100%);
 }
@@ -1089,6 +1095,20 @@ h3 {
 .setup-message {
   margin-top: 22px;
   max-width: 560px;
+  text-align: left;
+  width: 100%;
+}
+
+.step-ready-note {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(22, 163, 74, 0.22);
+  border-radius: 12px;
+  color: #166534;
+  font-size: 13px;
+  line-height: 1.5;
+  margin-top: 22px;
+  max-width: 560px;
+  padding: 12px 14px;
   text-align: left;
   width: 100%;
 }

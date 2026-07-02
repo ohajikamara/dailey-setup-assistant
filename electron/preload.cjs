@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld("daileyAssistant", {
   startGithubLogin: () => ipcRenderer.invoke("assistant:start-github-login"),
   openUrl: (url) => ipcRenderer.invoke("assistant:open-url", url),
   restartAiApps: (apps) => ipcRenderer.invoke("assistant:restart-ai-apps", apps),
+  checkLatestUpdate: () => ipcRenderer.invoke("assistant:check-latest-update"),
   latestUpdate: () => ipcRenderer.invoke("assistant:latest-update"),
   installTools: () => ipcRenderer.send("assistant:install-tools"),
   onUpdateStatus: (callback) => {

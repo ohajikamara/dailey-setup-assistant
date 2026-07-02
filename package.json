@@ -1,6 +1,6 @@
 {
   "name": "dailey-setup-assistant",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "productName": "Dailey Setup Assistant",
   "description": "A friendly desktop setup assistant for Dailey OS, Codex MCP, and GitHub.",
   "main": "electron/main.cjs",

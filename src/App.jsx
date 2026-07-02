@@ -82,6 +82,11 @@ const api = window.daileyAssistant || {
   startGithubLogin: async () => ({ ok: false, detail: "Guided GitHub sign-in is available in the desktop app." }),
   openUrl: async (url) => window.open(url, "_blank", "noopener,noreferrer"),
   restartAiApps: async () => ({ ok: false, detail: "Reload is available in the desktop app." }),
+  checkLatestUpdate: async () => ({
+    ok: true,
+    status: "not-available",
+    detail: "Browser preview does not install app updates."
+  }),
   latestUpdate: async () => ({
     ok: false,
     status: "unavailable",
@@ -144,6 +149,31 @@ function IconButton({ icon, label, onClick }) {
       {icon}
     </button>
   );
+}
+
+function nextStageAfter(stages, currentId) {
+  const currentIndex = stages.findIndex((stage) => stage.id === currentId);
+  return currentIndex >= 0 ? stages[currentIndex + 1] : null;
+}
+
+function continueLabelForStage(stage) {
+  const labels = {
+    github: "Continue to GitHub",
+    ai: "Continue to AI platform",
+    reload: "Continue to reload step",
+    finish: "Continue to final check"
+  };
+  return labels[stage?.id] || "Continue";
+}
+
+function completeNoteForStage(stage) {
+  const notes = {
+    dailey: "Dailey is already connected on this Mac. Check the account status below, then continue when it is the right account.",
+    github: "GitHub is already connected on this Mac. Check the account status below, then continue when it is the right account.",
+    ai: "Your AI app is already connected to Dailey. Continue when you are ready to reload it.",
+    reload: "The connected AI app has already been reopened. Continue when you are ready for the final check."
+  };
+  return notes[stage?.id] || "This step is already complete. Continue when you are ready.";
 }
 
 function Button({ children, icon, variant = "secondary", busy, ...props }) {
@@ -1017,12 +1047,17 @@ function GithubLoginGuide({ githubLogin, onCopyCode, onOpenDevicePage }) {
   );
 }
 
-function FocusedStepScreen({ activeStage, stages, loading, busyAction, diagnostics, configureClient, connectedAiIds, message, onRefresh, githubLogin, onCopyGithubCode, onOpenGithubDevicePage, selectedAiIds, onToggleAiClient, onConnectSelectedAiApps }) {
+function FocusedStepScreen({ activeStage, stages, loading, busyAction, diagnostics, configureClient, connectedAiIds, message, onRefresh, githubLogin, onCopyGithubCode, onOpenGithubDevicePage, selectedAiIds, onToggleAiClient, onConnectSelectedAiApps, onContinueStage }) {
   if (!activeStage) return null;
 
   const stepCount = stages.length || setupStepLabels.length;
   const showAiChooser = activeStage.id === "ai";
   const showGithubGuide = activeStage.id === "github";
+  const nextStage = nextStageAfter(stages, activeStage.id);
+  const canContinue = Boolean(activeStage.complete && nextStage);
+  const primaryAction = canContinue ? () => onContinueStage(nextStage.id) : activeStage.onAction;
+  const primaryIcon = canContinue ? <ChevronRight aria-hidden="true" /> : activeStage.icon;
+  const primaryLabel = canContinue ? continueLabelForStage(nextStage) : activeStage.action;
   const actionBusy = loading ||
     (activeStage.id === "dailey" && busyAction === "dailey") ||
     (activeStage.id === "github" && busyAction === "github") ||
@@ -1042,11 +1077,11 @@ function FocusedStepScreen({ activeStage, stages, loading, busyAction, diagnosti
         <div className="setup-step-actions">
           <Button
             variant="hero"
-            icon={activeStage.icon}
-            onClick={activeStage.onAction}
+            icon={primaryIcon}
+            onClick={primaryAction}
             busy={actionBusy}
           >
-            {activeStage.action}
+            {primaryLabel}
           </Button>
           {canCheckAgain && (
             <Button icon={<RefreshCw aria-hidden="true" />} onClick={onRefresh} busy={loading}>
@@ -1054,6 +1089,7 @@ function FocusedStepScreen({ activeStage, stages, loading, busyAction, diagnosti
             </Button>
           )}
         </div>
+        {activeStage.complete && <div className="step-ready-note">{completeNoteForStage(activeStage)}</div>}
         {message && <div className="message setup-message">{message}</div>}
         {showAiChooser ? (
           <AIPlatformChooser
@@ -1293,6 +1329,7 @@ function App() {
   const [aiReloaded, setAiReloaded] = useState(false);
   const [finalChecked, setFinalChecked] = useState(false);
   const [hasStartedSetup, setHasStartedSetup] = useState(false);
+  const [focusedStageId, setFocusedStageId] = useState(null);
   const [githubLogin, setGithubLogin] = useState(null);
   const [selectedAiIds, setSelectedAiIds] = useState([]);
   const [theme, setTheme] = useState(() => localStorage.getItem("dailey-theme") || "light");
@@ -1327,7 +1364,6 @@ function App() {
   }
 
   useEffect(() => {
-    refresh();
     const stopLogs = api.onLog((payload) => {
       setLogs((current) => [
         { id: crypto.randomUUID(), at: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }), ...payload },
@@ -1342,6 +1378,19 @@ function App() {
       if (["not-available", "error", "unavailable", "installing"].includes(payload.status)) {
         setBusyAction("");
       }
+    });
+
+    refresh();
+    api.checkLatestUpdate().then((payload) => {
+      setUpdateStatus(payload);
+      if (payload.status === "available") {
+        setMessage(payload.detail);
+      }
+    }).catch((error) => {
+      setUpdateStatus({
+        status: "error",
+        detail: `Could not check GitHub for updates: ${error.message}`
+      });
     });
 
     return () => {
@@ -1473,6 +1522,11 @@ function App() {
     }));
   }, [diagnostics, aiReloaded, finalChecked, selectedAiIds]);
 
+  useEffect(() => {
+    if (!hasStartedSetup || focusedStageId || stages.length === 0) return;
+    setFocusedStageId(stages[0].id);
+  }, [hasStartedSetup, focusedStageId, stages]);
+
   const prerequisitesReady = Boolean(
     diagnostics?.tools.node.found &&
     diagnostics?.tools.npm.found &&
@@ -1503,7 +1557,9 @@ function App() {
     onAction: refresh,
     icon: <Loader2 className="spin" aria-hidden="true" />
   } : null;
-  const activeStage = loadingStage || preflightStage || stages.find((stage) => stage.state === "active") || stages[stages.length - 1];
+  const focusedStage = focusedStageId ? stages.find((stage) => stage.id === focusedStageId) : null;
+  const automaticActiveStage = stages.find((stage) => stage.state === "active") || stages[stages.length - 1];
+  const activeStage = loadingStage || preflightStage || focusedStage || automaticActiveStage;
   const setupComplete = Boolean(!loadingStage && !preflightStage && stages.length > 0 && stages.every((stage) => stage.complete));
   const allReady = setupComplete;
   const connectedAiIds = diagnostics ? Object.entries(diagnostics.clients)
@@ -1631,6 +1687,16 @@ function App() {
     setLogs([]);
     setMessage("The Dailey connector installer started. Keep this app open while it works.");
     api.installTools();
+  }
+
+  function beginSetup() {
+    setFocusedStageId(stages[0]?.id || null);
+    setHasStartedSetup(true);
+  }
+
+  function continueToStage(stageId) {
+    setFocusedStageId(stageId);
+    setMessage("");
   }
 
   async function latestUpdate() {
@@ -1772,10 +1838,11 @@ function App() {
                 selectedAiIds={selectedAiIds}
                 onToggleAiClient={toggleAiClient}
                 onConnectSelectedAiApps={connectSelectedAiApps}
+                onContinueStage={continueToStage}
               />
             ) : (
               <WelcomeScreen
-                onBegin={() => setHasStartedSetup(true)}
+                onBegin={beginSetup}
                 onOpenRequirements={() => setModal("help")}
               />
             )}
