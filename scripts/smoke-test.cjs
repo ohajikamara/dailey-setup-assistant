@@ -33,13 +33,13 @@ async function main() {
     await window.reload();
     await window.waitForLoadState("domcontentloaded");
     await window.getByText("Dailey Setup Assistant").first().waitFor({ timeout: 15000 });
-    await window.getByRole("heading", { name: "Let us set up Dailey on this Mac." }).waitFor({ timeout: 15000 });
+    await window.getByRole("heading", { name: "Let's set up Dailey on this Mac." }).waitFor({ timeout: 15000 });
     await window.getByRole("button", { name: "Begin setup" }).waitFor({ timeout: 15000 });
 
     const bodyText = await window.locator("body").innerText();
     const expected = [
       "Welcome",
-      "Let us set up Dailey on this Mac.",
+      "Let's set up Dailey on this Mac.",
       "Begin setup"
     ];
     const missing = expected.filter((text) => !bodyText.includes(text));
@@ -89,7 +89,7 @@ async function main() {
     await window.reload();
     await window.waitForLoadState("domcontentloaded");
     await window.getByText("Dailey Setup Assistant").first().waitFor({ timeout: 15000 });
-    await window.getByRole("heading", { name: "Let us set up Dailey on this Mac." }).waitFor({ timeout: 15000 });
+    await window.getByRole("heading", { name: "Let's set up Dailey on this Mac." }).waitFor({ timeout: 15000 });
     await window.evaluate(() => window.scrollTo(0, 0));
     console.log(`Smoke test passed. Screenshots: ${screenshotPath}, ${helpScreenshotPath}, ${settingsScreenshotPath}`);
   } finally {
