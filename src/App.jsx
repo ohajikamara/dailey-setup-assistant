@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
+import packageJson from "../package.json";
 import {
   BookOpen,
   CheckCircle2,
@@ -8,6 +9,8 @@ import {
   Cloud,
   Code2,
   Cpu,
+  Download,
+  FileCheck2,
   FileText,
   GitBranch,
   Home,
@@ -20,6 +23,8 @@ import {
   RefreshCw,
   Settings,
   ShieldCheck,
+  Sparkles,
+  Zap,
   Sun,
   Terminal,
   Unplug,
@@ -29,6 +34,13 @@ import {
 import "./styles.css";
 import daileyLogo from "./assets/dailey-logo.png";
 import introHero from "./assets/dailey-intro-hero.png";
+
+function formatVersionLabel(version) {
+  const [major = "1", minor = "0"] = version.split(".");
+  return `V${Number.parseInt(major, 10)}.${Number.parseInt(minor, 10)}`;
+}
+
+const APP_VERSION_LABEL = formatVersionLabel(packageJson.version);
 
 const browserPreviewDiagnostics = {
   checkedAt: new Date().toISOString(),
@@ -67,7 +79,13 @@ const api = window.daileyAssistant || {
   openTerminal: async () => ({ ok: false }),
   openUrl: async (url) => window.open(url, "_blank", "noopener,noreferrer"),
   restartAiApps: async () => ({ ok: false, detail: "Reload is available in the desktop app." }),
+  latestUpdate: async () => ({
+    ok: false,
+    status: "unavailable",
+    detail: "Latest Update works after the app is installed from the DMG."
+  }),
   installTools: () => {},
+  onUpdateStatus: () => () => {},
   onLog: () => () => {}
 };
 
@@ -143,7 +161,11 @@ function StatusPill({ ready }) {
   );
 }
 
-function TopBar({ ready, loading, onRefresh, onToggleTheme, onOpenHelp, onOpenSettings, theme }) {
+function VersionBadge() {
+  return <span className="version-badge">{APP_VERSION_LABEL}</span>;
+}
+
+function TopBar({ ready, loading, showUpdateButton, updateBusy, onRefresh, onLatestUpdate, onToggleTheme, onOpenHelp, onOpenSettings, theme }) {
   return (
     <header className="topbar">
       <div className="traffic-lights" aria-hidden="true">
@@ -154,10 +176,14 @@ function TopBar({ ready, loading, onRefresh, onToggleTheme, onOpenHelp, onOpenSe
       <div className="top-title">
         <LogoMark size="tiny" />
         <strong>Dailey Setup Assistant</strong>
+        <VersionBadge />
       </div>
       <div className="top-controls">
         <StatusPill ready={ready} />
         <IconButton icon={loading ? <Loader2 className="spin" /> : <RefreshCw />} label="Refresh" onClick={onRefresh} />
+        {showUpdateButton && (
+          <IconButton icon={updateBusy ? <Loader2 className="spin" /> : <Download />} label="Latest Update" onClick={onLatestUpdate} />
+        )}
         <IconButton icon={theme === "dark" ? <Sun /> : <Moon />} label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} onClick={onToggleTheme} />
         <IconButton icon={<CircleHelp />} label="Help" onClick={onOpenHelp} />
         <IconButton icon={<Settings />} label="Settings" onClick={onOpenSettings} />
@@ -166,7 +192,7 @@ function TopBar({ ready, loading, onRefresh, onToggleTheme, onOpenHelp, onOpenSe
   );
 }
 
-function SetupTopBar({ onToggleTheme, onOpenHelp, onOpenSettings, theme }) {
+function SetupTopBar({ showUpdateButton, updateBusy, onLatestUpdate, onToggleTheme, onOpenHelp, onOpenSettings, theme }) {
   return (
     <header className="topbar setup-topbar">
       <div className="traffic-lights" aria-hidden="true">
@@ -177,8 +203,12 @@ function SetupTopBar({ onToggleTheme, onOpenHelp, onOpenSettings, theme }) {
       <div className="top-title">
         <LogoMark size="tiny" />
         <strong>Dailey Setup Assistant</strong>
+        <VersionBadge />
       </div>
       <div className="top-controls">
+        {showUpdateButton && (
+          <IconButton icon={updateBusy ? <Loader2 className="spin" /> : <Download />} label="Latest Update" onClick={onLatestUpdate} />
+        )}
         <IconButton icon={theme === "dark" ? <Sun /> : <Moon />} label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} onClick={onToggleTheme} />
         <IconButton icon={<CircleHelp />} label="Help" onClick={onOpenHelp} />
         <IconButton icon={<Settings />} label="Settings" onClick={onOpenSettings} />
@@ -545,7 +575,7 @@ function AIAppConnectionsCard({ diagnostics, configureClient, busyAction }) {
   );
 }
 
-function QuickActionsCard({ openTerminal, configureClient, busyAction }) {
+function QuickActionsCard({ openTerminal, configureClient, latestUpdate, showUpdateButton, busyAction }) {
   const actions = [
     {
       title: "Open Dailey Setup",
@@ -568,6 +598,13 @@ function QuickActionsCard({ openTerminal, configureClient, busyAction }) {
       onClick: () => configureClient("codex"),
       busy: busyAction === "codex"
     },
+    ...(showUpdateButton ? [{
+      title: "Latest Update",
+      caption: "Install the newest app release",
+      icon: <Download />,
+      onClick: latestUpdate,
+      busy: busyAction === "latest-update"
+    }] : []),
     {
       title: "Open Dailey Docs",
       caption: "Open the getting started guide",
@@ -736,19 +773,65 @@ function StageLogCard({ stage, logs, onOpenFullLog, showSampleLogs }) {
   );
 }
 
-function WelcomeScreen({ onBegin }) {
+function WelcomeScreen({ onBegin, onOpenRequirements }) {
+  const previewSteps = [
+    ["Dailey", <LogoMark size="tiny" />],
+    ["GitHub", <GitBranch aria-hidden="true" />],
+    ["AI App", <Sparkles aria-hidden="true" />],
+    ["Final Check", <CheckCircle2 aria-hidden="true" />]
+  ];
+  const trustItems = [
+    ["Secure", "Your privacy comes first.", <ShieldCheck aria-hidden="true" />],
+    ["Fast", "Guided in minutes.", <Zap aria-hidden="true" />],
+    ["Reliable", "Built for a smooth setup.", <CheckCircle2 aria-hidden="true" />]
+  ];
+
   return (
     <section className="setup-welcome-screen" id="overview">
-      <div className="welcome-visual" aria-hidden="true">
-        <img src={introHero} alt="" />
-      </div>
       <div className="setup-welcome-copy">
-        <span>Welcome</span>
-        <h1>Let's set up Dailey on this Mac.</h1>
-        <p>We will go one step at a time: Dailey, GitHub, your AI app, then a final check. Nothing else appears until it is needed.</p>
-        <Button variant="hero" icon={<ChevronRight aria-hidden="true" />} onClick={onBegin}>
-          Begin setup
-        </Button>
+        <span className="welcome-chip">Welcome</span>
+        <h1>Set up Dailey on this Mac.</h1>
+        <p>We will guide you through Dailey, GitHub, your AI app, and a final check, one step at a time.</p>
+
+        <div className="welcome-step-preview" aria-label="Setup overview">
+          {previewSteps.map(([label, icon], index) => (
+            <div className="welcome-step-card" key={label}>
+              <span>{index + 1}</span>
+              <div>{icon}</div>
+              <strong>{label}</strong>
+            </div>
+          ))}
+        </div>
+
+        <div className="welcome-actions">
+          <Button variant="hero" icon={<ChevronRight aria-hidden="true" />} onClick={onBegin}>
+            Begin setup
+          </Button>
+          <Button icon={<FileCheck2 aria-hidden="true" />} onClick={onOpenRequirements}>
+            View requirements
+          </Button>
+        </div>
+
+        <div className="welcome-privacy-note">
+          <ShieldCheck aria-hidden="true" />
+          <div>
+            <strong>Your data stays private and secure.</strong>
+            <span>We only access what is needed to complete setup.</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="welcome-visual">
+        <img src={introHero} alt="" aria-hidden="true" />
+        <div className="welcome-trust-strip" aria-label="Setup qualities">
+          {trustItems.map(([title, body, icon]) => (
+            <div className="welcome-trust-item" key={title}>
+              <div>{icon}</div>
+              <strong>{title}</strong>
+              <span>{body}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   );
@@ -919,7 +1002,7 @@ function DashboardWelcome({ diagnostics }) {
   );
 }
 
-function DashboardView({ diagnostics, score, stages, configureClient, busyAction, openTerminal, logs, settings, onOpenFullLog }) {
+function DashboardView({ diagnostics, score, stages, configureClient, busyAction, openTerminal, latestUpdate, showUpdateButton, logs, settings, onOpenFullLog }) {
   return (
     <>
       <DashboardWelcome diagnostics={diagnostics} />
@@ -931,7 +1014,7 @@ function DashboardView({ diagnostics, score, stages, configureClient, busyAction
       </div>
 
       <div className="bottom-grid">
-        <QuickActionsCard openTerminal={openTerminal} configureClient={configureClient} busyAction={busyAction} />
+        <QuickActionsCard openTerminal={openTerminal} configureClient={configureClient} latestUpdate={latestUpdate} showUpdateButton={showUpdateButton} busyAction={busyAction} />
         <InstallerLogCard logs={logs} onOpenFullLog={onOpenFullLog} showSampleLogs={settings.showSampleLogs} />
       </div>
 
@@ -1108,6 +1191,7 @@ function App() {
   const [busyAction, setBusyAction] = useState("");
   const [logs, setLogs] = useState([]);
   const [message, setMessage] = useState("");
+  const [updateStatus, setUpdateStatus] = useState(null);
   const [aiReloaded, setAiReloaded] = useState(false);
   const [finalChecked, setFinalChecked] = useState(false);
   const [hasStartedSetup, setHasStartedSetup] = useState(false);
@@ -1141,12 +1225,26 @@ function App() {
 
   useEffect(() => {
     refresh();
-    return api.onLog((payload) => {
+    const stopLogs = api.onLog((payload) => {
       setLogs((current) => [
         { id: crypto.randomUUID(), at: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }), ...payload },
         ...current
       ].slice(0, 80));
     });
+    const stopUpdateStatus = api.onUpdateStatus((payload) => {
+      setUpdateStatus(payload);
+      if (["available", "downloading", "downloaded", "installing", "error"].includes(payload.status)) {
+        setMessage(payload.detail);
+      }
+      if (["not-available", "error", "unavailable", "installing"].includes(payload.status)) {
+        setBusyAction("");
+      }
+    });
+
+    return () => {
+      stopLogs();
+      stopUpdateStatus();
+    };
   }, []);
 
   useEffect(() => {
@@ -1295,6 +1393,10 @@ function App() {
   const connectedAiIds = diagnostics ? Object.entries(diagnostics.clients)
     .filter(([, client]) => client.installed && client.daileyBlockLooksValid)
     .map(([id]) => id) : [];
+  const showUpdateButton = ["available", "downloading", "downloaded", "installing"].includes(updateStatus?.status) ||
+    (busyAction === "latest-update" && updateStatus?.status !== "not-available");
+  const updateBusy = busyAction === "latest-update" ||
+    ["downloading", "downloaded", "installing"].includes(updateStatus?.status);
 
   async function configureClient(client) {
     setBusyAction(client);
@@ -1330,6 +1432,36 @@ function App() {
     setLogs([]);
     setMessage("The Dailey connector installer started. Keep this app open while it works.");
     api.installTools();
+  }
+
+  async function latestUpdate() {
+    setBusyAction("latest-update");
+    setUpdateStatus({
+      status: "downloading",
+      version: updateStatus?.version,
+      percent: 0,
+      detail: updateStatus?.version
+        ? `Downloading version ${updateStatus.version} from GitHub...`
+        : "Starting the GitHub update download..."
+    });
+    setMessage(updateStatus?.version
+      ? `Downloading version ${updateStatus.version} from GitHub...`
+      : "Starting the GitHub update download...");
+    try {
+      const result = await api.latestUpdate();
+      setUpdateStatus(result);
+      setMessage(result.detail);
+      if (!result.ok || ["not-available", "unavailable", "error"].includes(result.status)) {
+        setBusyAction("");
+      }
+    } catch (error) {
+      setUpdateStatus({
+        status: "error",
+        detail: `Could not check for updates: ${error.message}`
+      });
+      setMessage(`Could not check for updates: ${error.message}`);
+      setBusyAction("");
+    }
   }
 
   async function reloadAiApps() {
@@ -1370,7 +1502,10 @@ function App() {
           <TopBar
             ready={allReady}
             loading={loading}
+            showUpdateButton={showUpdateButton}
+            updateBusy={updateBusy}
             onRefresh={refresh}
+            onLatestUpdate={latestUpdate}
             onToggleTheme={() => setTheme((current) => current === "dark" ? "light" : "dark")}
             onOpenHelp={() => setModal("help")}
             onOpenSettings={() => setModal("settings")}
@@ -1394,6 +1529,8 @@ function App() {
                 configureClient={configureClient}
                 busyAction={busyAction}
                 openTerminal={openTerminal}
+                latestUpdate={latestUpdate}
+                showUpdateButton={showUpdateButton}
                 logs={logs}
                 settings={settings}
                 onOpenFullLog={() => setModal("logs")}
@@ -1404,12 +1541,16 @@ function App() {
       ) : (
         <>
           <SetupTopBar
+            showUpdateButton={showUpdateButton}
+            updateBusy={updateBusy}
+            onLatestUpdate={latestUpdate}
             onToggleTheme={() => setTheme((current) => current === "dark" ? "light" : "dark")}
             onOpenHelp={() => setModal("help")}
             onOpenSettings={() => setModal("settings")}
             theme={theme}
           />
           <div className="setup-only-shell">
+            {!hasStartedSetup && message && <div className="message setup-global-message">{message}</div>}
             {hasStartedSetup ? (
               <FocusedStepScreen
                 activeStage={activeStage}
@@ -1423,7 +1564,10 @@ function App() {
                 onRefresh={refresh}
               />
             ) : (
-              <WelcomeScreen onBegin={() => setHasStartedSetup(true)} />
+              <WelcomeScreen
+                onBegin={() => setHasStartedSetup(true)}
+                onOpenRequirements={() => setModal("help")}
+              />
             )}
           </div>
         </>

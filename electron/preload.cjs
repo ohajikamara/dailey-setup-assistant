@@ -7,7 +7,13 @@ contextBridge.exposeInMainWorld("daileyAssistant", {
   openTerminal: (command) => ipcRenderer.invoke("assistant:open-terminal", command),
   openUrl: (url) => ipcRenderer.invoke("assistant:open-url", url),
   restartAiApps: (apps) => ipcRenderer.invoke("assistant:restart-ai-apps", apps),
+  latestUpdate: () => ipcRenderer.invoke("assistant:latest-update"),
   installTools: () => ipcRenderer.send("assistant:install-tools"),
+  onUpdateStatus: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("assistant:update-status", listener);
+    return () => ipcRenderer.removeListener("assistant:update-status", listener);
+  },
   onLog: (callback) => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("assistant:log", listener);

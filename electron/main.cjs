@@ -8,6 +8,9 @@ const jsonc = require("jsonc-parser");
 
 const isDev = process.env.DAILEY_ASSISTANT_DEV === "1";
 const homeDir = process.env.DAILEY_ASSISTANT_HOME || os.homedir();
+let installUpdateWhenReady = false;
+let latestUpdateInfo = null;
+let downloadedUpdateInfo = null;
 
 function appIconPath() {
   if (app.isPackaged) {
@@ -36,9 +39,10 @@ function commandPath() {
 
 function createWindow() {
   const win = new BrowserWindow({
-    width: 1360,
-    height: 900,
-    minWidth: 1080,
+    width: 1586,
+    height: 992,
+    useContentSize: true,
+    minWidth: 1180,
     minHeight: 740,
     title: "Dailey Setup Assistant",
     icon: appIconImage(),
@@ -57,22 +61,82 @@ function createWindow() {
   }
 }
 
+function sendUpdateStatus(payload) {
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send("assistant:update-status", payload);
+  }
+}
+
 function configureAutoUpdates() {
   if (isDev || !app.isPackaged) return;
 
-  autoUpdater.autoDownload = true;
+  autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
 
+  autoUpdater.on("checking-for-update", () => {
+    sendUpdateStatus({
+      status: "checking",
+      automatic: !installUpdateWhenReady,
+      detail: "Checking GitHub for the latest Dailey Setup Assistant update..."
+    });
+  });
+
+  autoUpdater.on("update-available", (info) => {
+    latestUpdateInfo = info;
+    sendUpdateStatus({
+      status: "available",
+      version: info.version,
+      detail: `Version ${info.version} is available. Click Latest Update to install it.`
+    });
+  });
+
+  autoUpdater.on("download-progress", (progress) => {
+    const percent = Math.round(progress.percent || 0);
+    sendUpdateStatus({
+      status: "downloading",
+      percent,
+      detail: `Downloading the latest update from GitHub... ${percent}%`
+    });
+  });
+
+  autoUpdater.on("update-not-available", () => {
+    installUpdateWhenReady = false;
+    latestUpdateInfo = null;
+    downloadedUpdateInfo = null;
+    sendUpdateStatus({
+      status: "not-available",
+      detail: "You already have the latest version installed."
+    });
+  });
+
   autoUpdater.on("error", (error) => {
+    installUpdateWhenReady = false;
+    sendUpdateStatus({
+      status: "error",
+      detail: `Could not check for updates: ${error.message}`
+    });
     console.error("Update check failed:", error);
   });
 
-  autoUpdater.on("update-downloaded", () => {
+  autoUpdater.on("update-downloaded", (info) => {
+    downloadedUpdateInfo = info;
+    sendUpdateStatus({
+      status: installUpdateWhenReady ? "installing" : "downloaded",
+      version: info.version,
+      detail: installUpdateWhenReady
+        ? `Version ${info.version} downloaded. Restarting now to install it.`
+        : `Version ${info.version} downloaded. It will install when the app quits.`
+    });
     console.log("Update downloaded. It will install when the app quits.");
+    if (installUpdateWhenReady) {
+      setTimeout(() => {
+        autoUpdater.quitAndInstall(false, true);
+      }, 1200);
+    }
   });
 
   setTimeout(() => {
-    autoUpdater.checkForUpdatesAndNotify().catch((error) => {
+    autoUpdater.checkForUpdates().catch((error) => {
       console.error("Update check failed:", error);
     });
   }, 4000);
@@ -539,6 +603,63 @@ ipcMain.handle("assistant:open-terminal", async (_event, command) => {
 ipcMain.handle("assistant:open-url", async (_event, url) => {
   await shell.openExternal(url);
   return { ok: true };
+});
+
+ipcMain.handle("assistant:latest-update", async () => {
+  if (isDev || !app.isPackaged) {
+    return {
+      ok: false,
+      status: "unavailable",
+      detail: "Latest Update works after the app is installed from the DMG. Development preview cannot install itself."
+    };
+  }
+
+  installUpdateWhenReady = true;
+  autoUpdater.autoDownload = false;
+
+  if (downloadedUpdateInfo) {
+    sendUpdateStatus({
+      status: "installing",
+      version: downloadedUpdateInfo.version,
+      detail: `Version ${downloadedUpdateInfo.version} is ready. Restarting now to install it.`
+    });
+    setTimeout(() => {
+      autoUpdater.quitAndInstall(false, true);
+    }, 800);
+
+    return {
+      ok: true,
+      status: "installing",
+      detail: `Version ${downloadedUpdateInfo.version} is ready. Restarting now to install it.`
+    };
+  }
+
+  if (!latestUpdateInfo) {
+    const result = await autoUpdater.checkForUpdates();
+    if (!result?.updateInfo || result.updateInfo.version === app.getVersion()) {
+      return {
+        ok: false,
+        status: "not-available",
+        detail: "You already have the latest version installed."
+      };
+    }
+    latestUpdateInfo = result.updateInfo;
+  }
+
+  sendUpdateStatus({
+    status: "downloading",
+    version: latestUpdateInfo.version,
+    percent: 0,
+    detail: `Downloading version ${latestUpdateInfo.version} from GitHub...`
+  });
+  await autoUpdater.downloadUpdate();
+
+  return {
+    ok: true,
+    status: "downloading",
+    version: latestUpdateInfo.version,
+    detail: `Downloading version ${latestUpdateInfo.version}. The app will restart to install it when ready.`
+  };
 });
 
 ipcMain.handle("assistant:restart-ai-apps", async (_event, apps = []) => {
