@@ -1,0 +1,108 @@
+{
+  "name": "dailey-setup-assistant",
+  "version": "0.1.0",
+  "productName": "Dailey Setup Assistant",
+  "description": "A friendly desktop setup assistant for Dailey OS, Codex MCP, and GitHub.",
+  "main": "electron/main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on tcp:127.0.0.1:5173 && DAILEY_ASSISTANT_DEV=1 electron .\"",
+    "build": "vite build",
+    "start": "electron .",
+    "dist": "npm run check && electron-builder --mac",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "release:github": "npm run check && electron-builder --mac --publish always",
+    "check": "npm run build && npm run test:smoke && npm run test:configure",
+    "test:smoke": "node scripts/smoke-test.cjs",
+    "test:configure": "node scripts/configure-services-test.cjs"
+  },
+  "keywords": [
+    "dailey",
+    "mcp",
+    "codex",
+    "github",
+    "setup"
+  ],
+  "author": "KMRA",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "electron-updater": "^6.8.9",
+    "jsonc-parser": "^3.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.0.3",
+    "concurrently": "^10.0.3",
+    "electron": "^43.0.0",
+    "electron-builder": "^26.15.3",
+    "lucide-react": "^1.23.0",
+    "playwright": "^1.61.1",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "typescript": "^5.9.3",
+    "vite": "^8.1.2",
+    "wait-on": "^9.0.10"
+  },
+  "build": {
+    "appId": "cloud.dailey.setup-assistant",
+    "artifactName": "Dailey-Setup-Assistant-${version}-${arch}.${ext}",
+    "asar": true,
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "ohajikamara",
+        "repo": "dailey-setup-assistant",
+        "releaseType": "release"
+      }
+    ],
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "build/icon.icns",
+      "identity": null,
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "universal"
+          ]
+        }
+      ]
+    },
+    "dmg": {
+      "icon": "build/icon.icns",
+      "title": "Dailey Setup Assistant",
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    }
+  }
+}
