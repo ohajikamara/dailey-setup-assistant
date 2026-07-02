@@ -11,7 +11,7 @@
     "start": "electron .",
     "dist": "npm run check && electron-builder --mac",
     "dist:mac": "npm run build && electron-builder --mac",
-    "release:github": "npm run check && electron-builder --mac --publish always",
+    "release:github": "npm run check && electron-builder --mac --publish never && node scripts/publish-github-release.cjs",
     "check": "npm run build && npm run test:smoke && npm run test:configure",
     "test:smoke": "node scripts/smoke-test.cjs",
     "test:configure": "node scripts/configure-services-test.cjs"
