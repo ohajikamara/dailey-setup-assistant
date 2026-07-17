@@ -12,7 +12,6 @@ import {
   Cpu,
   Download,
   ExternalLink,
-  FileCheck2,
   FileText,
   GitBranch,
   Home,
@@ -25,8 +24,6 @@ import {
   RefreshCw,
   Settings,
   ShieldCheck,
-  Sparkles,
-  Zap,
   Sun,
   Terminal,
   Unplug,
@@ -807,64 +804,31 @@ function StageLogCard({ stage, logs, onOpenFullLog, showSampleLogs }) {
 }
 
 function WelcomeScreen({ onBegin, onOpenRequirements }) {
-  const previewSteps = [
-    ["Dailey", <LogoMark size="tiny" />],
-    ["GitHub", <GitBranch aria-hidden="true" />],
-    ["AI App", <Sparkles aria-hidden="true" />],
-    ["Final Check", <CheckCircle2 aria-hidden="true" />]
-  ];
-  const trustItems = [
-    ["Secure", "Your privacy comes first.", <ShieldCheck aria-hidden="true" />],
-    ["Fast", "Guided in minutes.", <Zap aria-hidden="true" />],
-    ["Reliable", "Built for a smooth setup.", <CheckCircle2 aria-hidden="true" />]
-  ];
-
   return (
     <section className="setup-welcome-screen" id="overview">
       <div className="setup-welcome-copy">
         <span className="welcome-chip">Welcome</span>
         <h1>Set up Dailey on this Mac.</h1>
-        <p>We will guide you through Dailey, GitHub, your AI app, and a final check, one step at a time.</p>
-
-        <div className="welcome-step-preview" aria-label="Setup overview">
-          {previewSteps.map(([label, icon], index) => (
-            <div className="welcome-step-card" key={label}>
-              <span>{index + 1}</span>
-              <div>{icon}</div>
-              <strong>{label}</strong>
-            </div>
-          ))}
-        </div>
+        <p>First, we’ll check what is already connected. Then we’ll guide you through only the steps this Mac still needs.</p>
 
         <div className="welcome-actions">
           <Button variant="hero" icon={<ChevronRight aria-hidden="true" />} onClick={onBegin}>
-            Begin setup
-          </Button>
-          <Button icon={<FileCheck2 aria-hidden="true" />} onClick={onOpenRequirements}>
-            View requirements
+            Check this Mac
           </Button>
         </div>
 
         <div className="welcome-privacy-note">
           <ShieldCheck aria-hidden="true" />
           <div>
-            <strong>Your data stays private and secure.</strong>
-            <span>We only access what is needed to complete setup.</span>
+            <strong>You can stop at any time.</strong>
+            <span>We check this Mac first, and only ask you to sign in or connect an app when it is needed.</span>
           </div>
         </div>
+        <button className="welcome-requirements" type="button" onClick={onOpenRequirements}>What do I need?</button>
       </div>
 
       <div className="welcome-visual">
         <img src={introHero} alt="" aria-hidden="true" />
-        <div className="welcome-trust-strip" aria-label="Setup qualities">
-          {trustItems.map(([title, body, icon]) => (
-            <div className="welcome-trust-item" key={title}>
-              <div>{icon}</div>
-              <strong>{title}</strong>
-              <span>{body}</span>
-            </div>
-          ))}
-        </div>
       </div>
     </section>
   );
@@ -923,7 +887,7 @@ function FocusedStatusPanel({ stage, diagnostics, connectedAiIds }) {
   );
 }
 
-function AIPlatformChooser({ diagnostics, configureClient, busyAction, selectedAiIds, onToggleClient, onConnectSelected }) {
+function AIPlatformChooser({ diagnostics, busyAction, selectedAiIds, onToggleClient, onConnectSelected }) {
   const cards = clientCards.map((client) => {
     const state = diagnostics?.clients?.[client.id];
     const installed = Boolean(state?.installed);
@@ -984,18 +948,6 @@ function AIPlatformChooser({ diagnostics, configureClient, busyAction, selectedA
                   <Link aria-hidden="true" />
                   <span>Install {client.shortName}</span>
                 </button>
-              ) : !client.connected ? (
-                <Button
-                  icon={<Link aria-hidden="true" />}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    configureClient(client.id);
-                  }}
-                  busy={busyAction === client.id}
-                  disabled={!diagnostics}
-                >
-                  Connect only {client.shortName}
-                </Button>
               ) : null}
             </label>
           );
@@ -1094,7 +1046,6 @@ function FocusedStepScreen({ activeStage, stages, loading, busyAction, diagnosti
         {showAiChooser ? (
           <AIPlatformChooser
             diagnostics={diagnostics}
-            configureClient={configureClient}
             busyAction={busyAction}
             selectedAiIds={selectedAiIds}
             onToggleClient={onToggleAiClient}

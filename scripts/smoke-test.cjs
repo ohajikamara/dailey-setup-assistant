@@ -34,14 +34,14 @@ async function main() {
     await window.waitForLoadState("domcontentloaded");
     await window.getByText("Dailey Setup Assistant").first().waitFor({ timeout: 15000 });
     await window.getByRole("heading", { name: "Set up Dailey on this Mac." }).waitFor({ timeout: 15000 });
-    await window.getByRole("button", { name: "Begin setup" }).waitFor({ timeout: 15000 });
+    await window.getByRole("button", { name: "Check this Mac" }).waitFor({ timeout: 15000 });
 
     const bodyText = await window.locator("body").innerText();
     const expected = [
       "Welcome",
       "Set up Dailey on this Mac.",
       "V1.2",
-      "Begin setup"
+      "Check this Mac"
     ];
     const missing = expected.filter((text) => !bodyText.includes(text));
     if (missing.length > 0) {
@@ -52,7 +52,7 @@ async function main() {
     }
 
     await window.screenshot({ path: screenshotPath, fullPage: true });
-    await window.getByRole("button", { name: "Begin setup" }).click();
+    await window.getByRole("button", { name: "Check this Mac" }).click();
     await window.locator(".setup-step-screen").waitFor({ timeout: 15000 });
     await window.getByText(/Step [1-5] of 5|Getting things ready|Preparation/).first().waitFor({ timeout: 15000 });
     await window.locator(".step-orb").waitFor({ timeout: 15000 });

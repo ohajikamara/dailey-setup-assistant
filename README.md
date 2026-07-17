@@ -9,7 +9,7 @@ This first version supports:
 - OpenCode
 - GitHub CLI sign-in
 - Dailey CLI sign-in
-- Dailey MCP installation checks
+- Dailey CLI + MCP version and connection checks
 - Safe config backups before editing local AI app config files
 
 ## Open The App
@@ -86,6 +86,12 @@ Runs the official Dailey installer:
 curl -fsSL https://get.dailey.cloud/install.sh | bash
 ```
 
+Then refreshes both Dailey packages to their latest releases:
+
+```bash
+npm install -g @daileyos/cli@latest @daileyos/mcp-server@latest
+```
+
 ### Open Dailey Setup
 
 Opens Terminal and runs:
@@ -127,3 +133,7 @@ Backs up and updates:
 ```
 
 After connecting an AI app, fully restart that app so it reloads the MCP configuration.
+
+The assistant keeps the Dailey MCP command on `@latest`, which matters because
+Dailey WordPress tools evolve with the platform. Existing Dailey environment
+variables and nested tool settings are kept when Codex is refreshed.

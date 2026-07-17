@@ -155,9 +155,7 @@ h3 {
 .app-shell.dark .github-login-guide,
 .app-shell.dark .github-code-box,
 .app-shell.dark .setup-ai-toolbar,
-.app-shell.dark .setup-choice-card,
-.app-shell.dark .welcome-step-card,
-.app-shell.dark .welcome-trust-strip {
+.app-shell.dark .setup-choice-card {
   background: rgba(18, 35, 58, 0.64);
   border-color: rgba(173, 194, 223, 0.18);
 }
@@ -194,7 +192,6 @@ h3 {
 .app-shell.dark .setup-ai-toolbar span,
 .app-shell.dark .welcome-privacy-note strong,
 .app-shell.dark .welcome-privacy-note span,
-.app-shell.dark .welcome-trust-item span,
 .app-shell.dark .muted,
 .app-shell.dark .quick-action span,
 .app-shell.dark .ai-mini-card p,
@@ -780,34 +777,22 @@ h3 {
 
 .setup-welcome-screen {
   grid-template-columns: minmax(590px, 0.92fr) minmax(720px, 1.08fr);
-  padding: 44px 0 44px 52px;
+  padding: 44px 52px;
 }
 
-.welcome-visual {
-  align-content: stretch;
-  display: block;
-  gap: 24px;
-  height: 100%;
-  justify-items: center;
-  justify-content: center;
-  min-height: 100%;
-  min-width: 0;
-  overflow: hidden;
-  padding: 0;
-  position: relative;
-}
+.welcome-visual { align-self: stretch; min-width: 0; position: relative; }
 
 .welcome-visual img {
   display: block;
   filter: drop-shadow(0 30px 48px rgba(18, 54, 101, 0.14));
-  height: 88%;
-  left: 4%;
+  height: 100%;
+  left: 0;
   mix-blend-mode: multiply;
   object-fit: contain;
   object-position: center;
   position: absolute;
-  top: 4%;
-  width: 92%;
+  top: 0;
+  width: 100%;
 }
 
 .app-shell.dark .welcome-visual img {
@@ -867,75 +852,11 @@ h3 {
   max-width: 560px;
 }
 
-.welcome-step-preview {
-  display: grid;
-  gap: 14px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin: 12px 0 26px;
-  width: 100%;
-}
-
-.welcome-step-card {
-  align-items: center;
-  background: rgba(255, 255, 255, 0.78);
-  border: 1px solid rgba(19, 87, 227, 0.1);
-  border-radius: 16px;
-  box-shadow: 0 12px 30px rgba(18, 54, 101, 0.06);
-  display: grid;
-  gap: 10px;
-  justify-items: center;
-  min-height: 126px;
-  padding: 16px 12px;
-  position: relative;
-  text-align: center;
-}
-
-.welcome-step-card > span {
-  align-items: center;
-  background: rgba(33, 182, 111, 0.16);
-  border-radius: 999px;
-  color: #0b7a4a;
-  display: flex;
-  font-size: 12px;
-  font-weight: 900;
-  height: 28px;
-  justify-content: center;
-  left: 12px;
-  position: absolute;
-  top: 12px;
-  width: 28px;
-}
-
-.welcome-step-card > div {
-  align-items: center;
-  color: var(--color-blue);
-  display: flex;
-  height: 36px;
-  justify-content: center;
-  margin-top: 18px;
-  width: 36px;
-}
-
-.welcome-step-card > div svg {
-  height: 30px;
-  width: 30px;
-}
-
-.welcome-step-card > div .logo-mark {
-  height: 36px;
-  width: 36px;
-}
-
-.welcome-step-card strong {
-  color: var(--color-text);
-  font-size: 13px;
-}
-
 .welcome-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 14px;
-  margin-bottom: 28px;
+  margin-bottom: 24px;
 }
 
 .welcome-actions .button {
@@ -973,69 +894,19 @@ h3 {
   line-height: 1.45;
 }
 
-.welcome-trust-strip {
-  align-items: center;
-  background: rgba(255, 255, 255, 0.68);
-  border: 1px solid rgba(19, 87, 227, 0.1);
-  border-radius: 18px;
-  box-shadow: 0 16px 36px rgba(18, 54, 101, 0.08);
-  display: grid;
-  gap: 0;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  max-width: 680px;
-  overflow: hidden;
-  padding: 16px 18px;
-  position: absolute;
-  bottom: 26px;
-  left: 24px;
-  right: 24px;
-  width: auto;
-}
-
-.welcome-trust-item {
-  align-items: center;
-  display: grid;
-  gap: 5px 12px;
-  grid-template-columns: 44px minmax(0, 1fr);
-  padding: 0 16px;
-}
-
-.welcome-trust-item + .welcome-trust-item {
-  border-left: 1px solid rgba(80, 97, 125, 0.14);
-}
-
-.welcome-trust-item > div {
-  align-items: center;
-  background: rgba(232, 242, 255, 0.95);
-  border-radius: 999px;
+.welcome-requirements {
+  background: transparent;
   color: var(--color-blue);
-  display: flex;
-  grid-row: span 2;
-  height: 44px;
-  justify-content: center;
-  width: 44px;
-}
-
-.welcome-trust-item:nth-child(2) > div {
-  background: rgba(33, 182, 111, 0.14);
-  color: #13a878;
-}
-
-.welcome-trust-item svg {
-  height: 21px;
-  width: 21px;
-}
-
-.welcome-trust-item strong {
-  color: var(--color-text);
+  cursor: pointer;
   font-size: 13px;
+  font-weight: 800;
+  margin-top: 22px;
+  padding: 4px 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
-.welcome-trust-item span {
-  color: var(--color-text-muted);
-  font-size: 12px;
-  line-height: 1.35;
-}
+.welcome-requirements:hover { color: var(--color-blue-deep); }
 
 .setup-step-screen {
   justify-items: center;
@@ -1280,11 +1151,6 @@ h3 {
   font-size: 12px;
   line-height: 1.45;
   margin-bottom: 0;
-}
-
-.setup-choice-card .button {
-  margin-top: 4px;
-  width: 100%;
 }
 
 .choice-status {
@@ -2599,23 +2465,6 @@ h3 {
   .setup-intro-panel,
   .dashboard-welcome {
     grid-template-columns: 1fr;
-  }
-
-  .welcome-step-preview {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .welcome-trust-strip {
-    grid-template-columns: 1fr;
-  }
-
-  .welcome-trust-item {
-    padding: 12px 4px;
-  }
-
-  .welcome-trust-item + .welcome-trust-item {
-    border-left: 0;
-    border-top: 1px solid rgba(80, 97, 125, 0.14);
   }
 
   .hero-art {

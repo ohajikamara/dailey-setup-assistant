@@ -35,6 +35,9 @@ function appIconImage() {
 function commandPath() {
   return [
     process.env.DAILEY_ASSISTANT_TEST_BIN || "",
+    // The current Dailey installer uses this location. Keep it ahead of older
+    // Homebrew/npm copies so diagnostics match the user's normal shell.
+    path.join(homeDir, ".local", "bin"),
     "/opt/homebrew/bin",
     "/usr/local/bin",
     "/usr/bin",
@@ -364,7 +367,9 @@ async function readCodexConfig() {
 
   const content = await fs.readFile(configPath, "utf8");
   const hasDaileyBlock = /^\[mcp_servers\."?dailey-os"?\]/m.test(content);
-  const daileyBlockLooksValid = hasDaileyBlock && /@daileyos\/mcp-server/.test(content);
+  // The Dailey MCP changes with the platform. Jonny's current guidance is to
+  // leave it on latest so new WordPress tools load after the AI app restarts.
+  const daileyBlockLooksValid = hasDaileyBlock && /@daileyos\/mcp-server@latest/.test(content);
 
   return {
     exists: true,
@@ -454,13 +459,13 @@ async function readMcpClients() {
 }
 
 async function diagnostics() {
-  const [node, npm, gh, dailey, clients, mcpPackage] = await Promise.all([
+  const [node, npm, gh, dailey, clients, daileyPackages] = await Promise.all([
     commandVersion("node"),
     commandVersion("npm"),
     commandVersion("gh"),
     commandVersion("dailey"),
     readMcpClients(),
-    execCommand("npm", ["list", "-g", "@daileyos/mcp-server", "--depth=0"], { timeout: 15000 })
+    execCommand("npm", ["list", "-g", "@daileyos/cli", "@daileyos/mcp-server", "--depth=0"], { timeout: 15000 })
   ]);
 
   const githubAuth = gh.found
@@ -468,7 +473,7 @@ async function diagnostics() {
     : { ok: false, stdout: "", stderr: "GitHub CLI is not installed" };
 
   const daileyAuth = dailey.found
-    ? await execCommand("dailey", ["whoami"], { timeout: 15000 })
+    ? await daileyAuthStatus()
     : { ok: false, stdout: "", stderr: "Dailey CLI is not installed" };
 
   const projects = dailey.found
@@ -488,8 +493,8 @@ async function diagnostics() {
       gh,
       dailey,
       daileyMcp: {
-        found: mcpPackage.ok,
-        detail: mcpPackage.ok ? "Dailey MCP package is installed globally" : "Dailey MCP package is not installed globally"
+        found: daileyPackages.ok,
+        detail: daileyPackages.ok ? firstUsefulLine(daileyPackages.stdout) : "Dailey CLI/MCP packages are not installed globally"
       }
     },
     accounts: {
@@ -509,6 +514,12 @@ async function diagnostics() {
       detail: projects.ok ? firstUsefulLine(projects.stdout) : firstUsefulLine(projects.stderr || projects.stdout)
     }
   };
+}
+
+async function daileyAuthStatus() {
+  const status = await execCommand("dailey", ["auth", "status"], { timeout: 15000 });
+  // Older CLI builds did not yet have `auth status`; retain a useful fallback.
+  return status.ok ? status : execCommand("dailey", ["whoami"], { timeout: 15000 });
 }
 
 function firstUsefulLine(value) {
@@ -692,8 +703,21 @@ async function configureCodex() {
   if (start === -1) {
     next = `${current.trimEnd()}\n\n${block}`.trimStart();
   } else {
+    // Preserve the user's environment and nested tool sections while updating
+    // only the server launch fields.
     const end = nextSectionIndex(current, start);
-    next = `${current.slice(0, start)}${block}${current.slice(end).replace(/^\n+/, "")}`;
+    const section = current.slice(start, end);
+    const replaceOrInsert = (source, key, value) => {
+      const assignment = new RegExp(`^${key}\\s*=.*$`, "m");
+      if (assignment.test(source)) return source.replace(assignment, `${key} = ${value}`);
+      return source.replace(/\n?$/, `\n${key} = ${value}\n`);
+    };
+    const refreshed = replaceOrInsert(
+      replaceOrInsert(section, "command", '"npx"'),
+      "args",
+      '["-y", "@daileyos/mcp-server@latest"]'
+    );
+    next = `${current.slice(0, start)}${refreshed}${current.slice(end)}`;
   }
 
   await fs.writeFile(configPath, next, "utf8");
@@ -929,6 +953,6 @@ ipcMain.handle("assistant:restart-ai-apps", async (_event, apps = []) => {
 ipcMain.on("assistant:install-tools", (event) => {
   streamCommand(event, "Dailey installer", "bash", [
     "-lc",
-    "curl -fsSL https://get.dailey.cloud/install.sh | bash"
+    "curl -fsSL https://get.dailey.cloud/install.sh | bash && npm install -g @daileyos/cli@latest @daileyos/mcp-server@latest"
   ]);
 });
